@@ -81,7 +81,7 @@ class Game:
     # Démarre la partie
     # return_winner:bool : Si TRUE : retourne une information sur le gagnant
     # max_turns:int : limite de tours, pour éviter les situations où les joueurs jouent en boucle sans jamais s'arrêter
-    def playGame(self, return_winner:bool=False, max_turns:int=200, play_once_only:bool=False):
+    def playGame(self, return_winner:bool=False, max_turns:int=200, play_once_only:bool=False, return_move:bool=False):
         turn_count = 0
         while True:
             if self.verbose:
@@ -141,6 +141,9 @@ class Game:
                         print(f"Player {typePlayer} - {self.player_one.name} wins !")
                     else:
                         print(f"Player {typePlayer} - {self.player_two.name} wins !")
+                if play_once_only:
+                    if return_move:
+                        return action
                 if return_winner:
                     if winner == self.player_one.position:
                         return 1
@@ -152,6 +155,9 @@ class Game:
             self.current_player, self.next_player = self.next_player, self.current_player
 
             if play_once_only:
+                if return_move:
+                    return action
+                    
                 return None
 
 

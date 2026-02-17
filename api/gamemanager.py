@@ -2,12 +2,15 @@ from sessionmemory import SessionMemory
 import sys
 sys.path.append('../onitama/')
 from game import Game
-from players import HeuristicPlayer, ApiPlayer, Player
+from card import Card
+from players import HeuristicPlayer, ApiPlayer, Player, RandomPlayer, LookAheadHeuristicPlayer
 from constants import *
 from exceptions import InvalidPlayerException, GameEndedException, InvalidSessionException, PlayerNotFoundException
 
 players = {
-    'heuristic_regular' : { 'class' : HeuristicPlayer(heuristic_function='heuristic_regular'), 'name' : 'Joueur heuristique (regular)'}
+    'heuristic_regular' : { 'class' : HeuristicPlayer(heuristic_function='heuristic_regular'), 'name' : 'Joueur heuristique (regular)'},
+    'random' : { 'class' : RandomPlayer(), 'name' : 'Joueur random'},
+    'heuristic_3lookahead_regular' : { 'class' : LookAheadHeuristicPlayer(max_depth=3, heuristic_function='heuristic_regular'), 'name' : 'Joueur 3 LookAhead heuristique (regular)'},
 }
 
 class GameManager:
@@ -39,6 +42,7 @@ class GameManager:
         self.turn_num = session['turn_num']
         self.pj = session['pj']
         self.pm = session['pm']
+        self.last_action = None
 
     def player_play(self, from_pos:tuple, to_pos:tuple, card_idx:int):
         if self.game.current_player == self.pj:
@@ -46,7 +50,7 @@ class GameManager:
             if ended:
                 raise GameEndedException()
             self.pj.set_next_move(from_pos=from_pos, to_pos=to_pos, card_idx=card_idx)
-            self.game.playGame(return_winner=False, max_turns=200, play_once_only=True)
+            self.last_action = self.game.playGame(return_winner=False, max_turns=200, play_once_only=True, return_move=True)
             self.turn_num += 1
             self.save()
         else:
@@ -57,7 +61,7 @@ class GameManager:
             ended, winner = self.game.board.game_has_ended()
             if ended:
                 raise GameEndedException()
-            self.game.playGame(return_winner=False, max_turns=200, play_once_only=True)
+            self.last_action = self.game.playGame(return_winner=False, max_turns=200, play_once_only=True, return_move=True)
             self.turn_num += 1
             self.save()
         else:
@@ -68,6 +72,29 @@ class GameManager:
 
     def get_game_representation(self):
         ended, winner = self.game.board.game_has_ended()
+        if ended:
+            if winner == self.pj.position:
+                winner = "HUMAN"
+            else:
+                winner = "IA"
+
+        action = self.last_action
+        if action is None:
+            action_data = None
+        else:
+            action_card = Card.getCardFromMove(move_idx=action.move_idx)
+
+            action_data = {
+                'from_pos' : {
+                    'col' : action.from_pos[0],
+                    'row' : action.from_pos[1]
+                },
+                'to_pos' : {
+                    'col' : action.to_pos[0],
+                    'row' : action.to_pos[1]
+                },
+                'card_idx' : action_card.idx
+            }
 
         return {
             'game_uid' : self.uid,
@@ -78,5 +105,6 @@ class GameManager:
             'neutral_card' :self.game.board.neutral_card,
             'board' : self.game.board.board,
             'ended' : ended,
-            'winner' : winner
+            'winner' : winner,
+            'last_move' : action_data
         }

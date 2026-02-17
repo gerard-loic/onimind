@@ -55,6 +55,15 @@ class Card:
     def getMove(move_idx:int):
         return Card.moves[move_idx]
     
+    # Retourne une carte en fonction de l'IDX du mouvement
+    def getCardFromMove(move_idx:int):
+        for card in CARDS:
+            for _, _, idx in card.relative_moves:
+                if idx == move_idx:
+                    return Card.getCard(card_idx=card.idx)
+        return None
+
+    
 
     #------------------------------------------------------------------------------------------------------------------------------------
 

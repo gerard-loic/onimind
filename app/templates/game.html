@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="fr" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Onitama RL</title>
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename= 'css/game.css') }}">
+    
+</head>
+<body>
+    
+    <div class="container-global">
+        <div id="ninja">
+            <div id="parole">Bla bla...</div>
+            <div id="character"></div>
+        </div>
+        <div id="board">
+            <div id="student_red_1" class="student_red"></div>
+            <div id="student_red_2" class="student_red"></div>
+            <div id="student_red_3" class="student_red"></div>
+            <div id="student_red_4" class="student_red"></div>
+            <div id="master_red" class="master_red"></div>
+            <div id="student_blue_1" class="student_blue"></div>
+            <div id="student_blue_2" class="student_blue"></div>
+            <div id="student_blue_3" class="student_blue"></div>
+            <div id="student_blue_4" class="student_blue"></div>
+            <div id="master_blue" class="master_blue"></div>
+            <div id="card_red_1"></div>
+            <div id="card_red_2"></div>
+            <div id="card_blue_1"></div>
+            <div id="card_blue_2"></div>
+            <div id="card_neutral"></div>
+        </div>
+    </div>
+
+
+    <script src="{{ url_for('static', filename= 'js/game.js') }}"></script>
+</body>
+</html>

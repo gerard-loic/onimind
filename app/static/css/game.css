@@ -1,0 +1,186 @@
+body{
+    background-color: black;
+    padding: 0px;
+    margin: 0px;
+    overflow: hidden;
+}
+
+.container-global{
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    height: 100vh;
+    width: 100vw;
+    position: relative;
+}
+
+#board{
+    height: 100vh;
+    aspect-ratio: 1200 / 2025;
+    background-image: url('../images/board.png');
+    background-size: cover;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.student_red{
+    width: 13.667%;
+    aspect-ratio: 164 / 213;
+    background-image: url('../images/etudiant_rouge.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    position: absolute;
+    pointer-events: none;
+}
+
+.master_red{
+    width: 17%;
+    aspect-ratio: 215 / 275;
+    background-image: url('../images/maitre_rouge.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    position: absolute;
+    pointer-events: none;
+}
+
+.student_blue{
+    width: 13.667%;
+    aspect-ratio: 164 / 213;
+    background-image: url('../images/etudiant_bleu.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    position: absolute;
+    pointer-events: none;
+}
+
+.master_blue{
+    width: 17%;
+    aspect-ratio: 215 / 275;
+    background-image: url('../images/maitre_bleu.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    position: absolute;
+    pointer-events: none;
+}
+
+.square{
+    background-color: white;
+    width: 18.16%;
+    height: 10.76%;
+    position: absolute;
+    opacity: 0%;
+    transition: opacity 0.3s ease;
+}
+
+#card_red_1{
+    -webkit-box-shadow: 0px 0px 12px -4px #000000; 
+    box-shadow: 0px 0px 12px -4px #000000;
+    width: 40%;
+    background-image: url('../images/carte_0.png');
+    aspect-ratio: 1277 / 720;
+    background-size: contain;
+    background-repeat: no-repeat;
+    position: absolute;
+    left:8%;
+    bottom:4%;
+    transition: opacity 0.3s ease;
+}
+#card_red_2{
+    -webkit-box-shadow: 0px 0px 12px -4px #000000; 
+    box-shadow: 0px 0px 12px -4px #000000;
+    width: 40%;
+    background-image: url('../images/carte_0.png');
+    aspect-ratio: 1277 / 720;
+    background-size: contain;
+    background-repeat: no-repeat;
+    position: absolute;
+    right:8%;
+    bottom:4%;
+    transition: opacity 0.3s ease;
+}
+#card_blue_1{
+    -webkit-box-shadow: 0px 0px 12px -4px #000000;
+    box-shadow: 0px 0px 12px -4px #000000;
+    width: 40%;
+    background-image: url('../images/carte_0.png');
+    aspect-ratio: 1277 / 720;
+    background-size: contain;
+    background-repeat: no-repeat;
+    position: absolute;
+    left:8%;
+    top:4%;
+    transform: rotate(180deg);
+}
+#card_blue_2{
+    -webkit-box-shadow: 0px 0px 12px -4px #000000;
+    box-shadow: 0px 0px 12px -4px #000000;
+    width: 40%;
+    background-image: url('../images/carte_0.png');
+    aspect-ratio: 1277 / 720;
+    background-size: contain;
+    background-repeat: no-repeat;
+    position: absolute;
+    right:8%;
+    top:4%;
+    transform: rotate(180deg);
+}
+
+#card_neutral{
+    -webkit-box-shadow: 0px 0px 12px -4px #000000; 
+    box-shadow: 0px 0px 12px -4px #000000;
+    width: 40%;
+    background-image: url('../images/carte_0.png');
+    aspect-ratio: 1277 / 720;
+    background-size: contain;
+    background-repeat: no-repeat;
+    position: absolute;
+    right:-45%;
+    top:43%;
+}
+
+#ninja{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: absolute;
+    left: 2vw;
+    bottom: 5vh;
+    width: 220px;
+    z-index: 100;
+}
+
+#parole{
+    background-color: white;
+    color: #333;
+    font-family: 'Comic Sans MS', 'Segoe UI', sans-serif;
+    font-size: 1rem;
+    padding: 12px 16px;
+    border-radius: 15px;
+    max-width: 220px;
+    min-width: 120px;
+    text-align: center;
+    position: relative;
+    box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
+    margin-bottom: 10px;
+}
+
+#parole::after{
+    content: '';
+    position: absolute;
+    bottom: -15px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 12px solid transparent;
+    border-right: 12px solid transparent;
+    border-top: 16px solid white;
+}
+
+#character{
+    width: 10vh;
+    aspect-ratio: 203/226;
+    background-image: url('../images/ninja.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+}

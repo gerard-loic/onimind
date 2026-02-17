@@ -1,4 +1,5 @@
 from fastapi import Depends, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from exceptions import AppException, InvalidPlayerException
 from pydantic import BaseModel
@@ -12,6 +13,14 @@ import uvicorn
 SessionMemory.init()
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:5000", "http://localhost:5000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 #Gestionnaire d'exception
 @app.exception_handler(AppException)
