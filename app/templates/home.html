@@ -1,2 +1,28 @@
-<h1>test</h1>
-<a href="">START GAME</a>
+<!DOCTYPE html>
+<html lang="fr" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Onitama RL</title>
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename= 'css/home.css') }}">
+    
+</head>
+<body>
+    
+    <div class="container-home">
+        <div id="logo">
+            <img src="{{ url_for('static', filename='images/onitama-logo.svg') }}" alt="Onitama">
+        </div>
+        <div id="infosjeu">Choisissez contre quel joueur vous souhaitez jouer :</div>
+        <div id="players">
+        </div>
+        <div id="infoslegales">
+            <p>Onitama est un jeu de société créé par Shimpei Sato et édité par Arcane Wonders. Cette application a été réalisée à des fins strictement éducatives dans le cadre d'une formation. Elle permet de visualiser les résultats d'expérimentations en reinforcement learning et deep learning. Ce projet n'a aucune vocation commerciale et ne prétend à aucun droit sur la propriété intellectuelle liée au jeu Onitama.</p>
+        </div>
+    </div>
+
+
+    <script src="{{ url_for('static', filename= 'js/home.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+  <defs>
+
+    <!-- Filtre principal : grain de papier ancien -->
+    <filter id="parchment" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB">
+
+      <!-- Bruit de base pour la texture du papier -->
+      <feTurbulence type="fractalNoise" baseFrequency="0.65 0.75" numOctaves="8" seed="42" result="noise1"/>
+      <feColorMatrix type="saturate" values="0" in="noise1" result="noiseGray"/>
+      <feComponentTransfer in="noiseGray" result="noiseLighter">
+        <feFuncR type="gamma" amplitude="1" exponent="0.4" offset="0.1"/>
+        <feFuncG type="gamma" amplitude="1" exponent="0.4" offset="0.1"/>
+        <feFuncB type="gamma" amplitude="1" exponent="0.4" offset="0.1"/>
+      </feComponentTransfer>
+
+      <!-- Bruit secondaire pour les irrégularités de vieux papier -->
+      <feTurbulence type="turbulence" baseFrequency="0.02 0.03" numOctaves="4" seed="17" result="noise2"/>
+      <feColorMatrix type="saturate" values="0" in="noise2" result="warpNoise"/>
+
+      <!-- Fusion des deux couches de bruit -->
+      <feMerge result="combinedNoise">
+        <feMergeNode in="noiseLighter"/>
+        <feMergeNode in="warpNoise"/>
+      </feMerge>
+      <feBlend in="SourceGraphic" in2="combinedNoise" mode="multiply" result="blended"/>
+
+      <!-- Ajuster le contraste final -->
+      <feComponentTransfer in="blended">
+        <feFuncR type="gamma" amplitude="1.1" exponent="0.85" offset="-0.02"/>
+        <feFuncG type="gamma" amplitude="0.95" exponent="1.1" offset="-0.05"/>
+        <feFuncB type="gamma" amplitude="0.85" exponent="1.2" offset="-0.05"/>
+      </feComponentTransfer>
+    </filter>
+
+    <!-- Grain fin supplémentaire -->
+    <filter id="grain" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" seed="99" result="grain"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.08 0" in="grain" result="grainAlpha"/>
+      <feComposite in="grainAlpha" in2="SourceGraphic" operator="in" result="grainMask"/>
+      <feMerge>
+        <feMergeNode in="SourceGraphic"/>
+        <feMergeNode in="grainMask"/>
+      </feMerge>
+    </filter>
+
+    <!-- Dégradé de base : rouge sombre → noir profond -->
+    <radialGradient id="bgGrad" cx="50%" cy="45%" r="70%">
+      <stop offset="0%"   stop-color="#6B1A1A"/>
+      <stop offset="40%"  stop-color="#3D0C0C"/>
+      <stop offset="75%"  stop-color="#1C0404"/>
+      <stop offset="100%" stop-color="#080000"/>
+    </radialGradient>
+
+    <!-- Vignette sombre sur les bords -->
+    <radialGradient id="vignette" cx="50%" cy="50%" r="70%">
+      <stop offset="50%"  stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.75"/>
+    </radialGradient>
+
+    <!-- Lumière centrale subtile -->
+    <radialGradient id="highlight" cx="50%" cy="40%" r="45%">
+      <stop offset="0%"   stop-color="#C05050" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#C05050" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Texture de craquelures parchemin -->
+    <filter id="crackle" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015 0.02" numOctaves="6" seed="7" result="cracks"/>
+      <feColorMatrix type="matrix"
+        values="3 -1 -1 0 -0.5
+                3 -1 -1 0 -0.5
+                3 -1 -1 0 -0.5
+                0  0  0 1  0"
+        in="cracks" result="cracksContrast"/>
+      <feComponentTransfer in="cracksContrast" result="cracksClamp">
+        <feFuncA type="linear" slope="0.06"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode in="SourceGraphic"/>
+        <feMergeNode in="cracksClamp"/>
+      </feMerge>
+    </filter>
+
+    <!-- Bruit pour taches d'encre / usure -->
+    <filter id="stains">
+      <feTurbulence type="turbulence" baseFrequency="0.04 0.05" numOctaves="3" seed="33"/>
+      <feColorMatrix type="matrix"
+        values="1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                0 0 0 0.05 -0.02"/>
+      <feComposite in2="SourceGraphic" operator="over"/>
+    </filter>
+
+  </defs>
+
+  <!-- Couche 1 : fond couleur de base -->
+  <rect width="600" height="600" fill="url(#bgGrad)"/>
+
+  <!-- Couche 2 : texture parchemin appliquée sur un rect rouge sombre -->
+  <rect width="600" height="600" fill="#7A2020" filter="url(#parchment)" opacity="0.9"/>
+
+  <!-- Couche 3 : taches et usure -->
+  <rect width="600" height="600" fill="#2A0808" filter="url(#stains)" opacity="0.4"/>
+
+  <!-- Couche 4 : craquelures subtiles -->
+  <rect width="600" height="600" fill="#1A0505" filter="url(#crackle)" opacity="0.35"/>
+
+  <!-- Couche 5 : grain fin -->
+  <rect width="600" height="600" fill="#3B0A0A" filter="url(#grain)" opacity="0.5"/>
+
+  <!-- Couche 6 : lumière centrale douce -->
+  <rect width="600" height="600" fill="url(#highlight)"/>
+
+  <!-- Couche 7 : vignette sombre -->
+  <rect width="600" height="600" fill="url(#vignette)"/>
+
+  <!-- Couche 8 : très légère teinte noire finale pour cohérence -->
+  <rect width="600" height="600" fill="#000000" opacity="0.15"/>
+</svg>
