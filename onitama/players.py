@@ -256,14 +256,14 @@ class MCTSPlayer(Player):
             while node.untried_actions is not None and len(node.untried_actions) == 0 and len(node.children) > 0:
                 node = node.best_child(self.exploration_constant)
                 last_move = board.play_move(node.action)
-                moves_stack.append(last_move)
+                moves_stack.append((False, last_move))
 
             # Expansion : si le noeud a des actions non essayées, en choisir une
             if node.untried_actions is not None and len(node.untried_actions) > 0:
                 action = random.choice(node.untried_actions)
                 node.untried_actions.remove(action)
                 last_move = board.play_move(action)
-                moves_stack.append(last_move)
+                moves_stack.append((False, last_move))
 
                 child = MCTSNode(parent=node, action=action)
                 child.untried_actions = board.get_available_moves()
@@ -274,9 +274,13 @@ class MCTSPlayer(Player):
             game_ended, winner = board.game_has_ended()
             while not game_ended:
                 available_moves = board.get_available_moves()
-                action = random.choice(available_moves)
-                last_move = board.play_move(action)
-                moves_stack.append(last_move)
+                if available_moves:
+                    action = random.choice(available_moves)
+                    last_move = board.play_move(action)
+                    moves_stack.append((False, last_move))
+                else:
+                    last_move = board.play_default_move()
+                    moves_stack.append((True, last_move))
                 game_ended, winner = board.game_has_ended()
 
             # Calculer le résultat
@@ -299,7 +303,11 @@ class MCTSPlayer(Player):
 
             # Annuler tous les coups joués
             while moves_stack:
-                board.cancel_last_move(moves_stack.pop())
+                is_default, last_move = moves_stack.pop()
+                if is_default:
+                    board.cancel_default_move(last_move)
+                else:
+                    board.cancel_last_move(last_move)
 
         return root.best_action()
 
@@ -321,6 +329,8 @@ class MCTSHeuristicPlayer(Player):
         """Sélectionne une action pour le rollout en utilisant l'heuristique."""
         available_moves = board.get_available_moves()
 
+        if not available_moves:
+            return None
 
         # Epsilon-greedy : parfois on joue aléatoirement pour diversifier
         if random.random() < self.epsilon:
@@ -359,14 +369,14 @@ class MCTSHeuristicPlayer(Player):
             while node.untried_actions is not None and len(node.untried_actions) == 0 and len(node.children) > 0:
                 node = node.best_child(self.exploration_constant)
                 last_move = board.play_move(node.action)
-                moves_stack.append(last_move)
+                moves_stack.append((False, last_move))
 
             # Expansion : si le noeud a des actions non essayées, en choisir une
             if node.untried_actions is not None and len(node.untried_actions) > 0:
                 action = random.choice(node.untried_actions)
                 node.untried_actions.remove(action)
                 last_move = board.play_move(action)
-                moves_stack.append(last_move)
+                moves_stack.append((False, last_move))
 
                 child = MCTSNode(parent=node, action=action)
                 child.untried_actions = board.get_available_moves()
@@ -377,8 +387,12 @@ class MCTSHeuristicPlayer(Player):
             game_ended, winner = board.game_has_ended()
             while not game_ended:
                 action = self._select_rollout_action(board)
-                last_move = board.play_move(action)
-                moves_stack.append(last_move)
+                if action is not None:
+                    last_move = board.play_move(action)
+                    moves_stack.append((False, last_move))
+                else:
+                    last_move = board.play_default_move()
+                    moves_stack.append((True, last_move))
                 game_ended, winner = board.game_has_ended()
 
             # Calculer le résultat
@@ -399,7 +413,11 @@ class MCTSHeuristicPlayer(Player):
 
             # Annuler tous les coups joués
             while moves_stack:
-                board.cancel_last_move(moves_stack.pop())
+                is_default, last_move = moves_stack.pop()
+                if is_default:
+                    board.cancel_default_move(last_move)
+                else:
+                    board.cancel_last_move(last_move)
 
         return root.best_action()
 
@@ -449,14 +467,14 @@ class MCTSEvalPlayer(Player):
             while node.untried_actions is not None and len(node.untried_actions) == 0 and len(node.children) > 0:
                 node = node.best_child(self.exploration_constant)
                 last_move = board.play_move(node.action)
-                moves_stack.append(last_move)
+                moves_stack.append((False, last_move))
 
             # Expansion : si le noeud a des actions non essayées, en choisir une
             if node.untried_actions is not None and len(node.untried_actions) > 0:
                 action = random.choice(node.untried_actions)
                 node.untried_actions.remove(action)
                 last_move = board.play_move(action)
-                moves_stack.append(last_move)
+                moves_stack.append((False, last_move))
 
                 child = MCTSNode(parent=node, action=action)
                 child.untried_actions = board.get_available_moves()
@@ -488,7 +506,11 @@ class MCTSEvalPlayer(Player):
 
             # Annuler tous les coups joués
             while moves_stack:
-                board.cancel_last_move(moves_stack.pop())
+                is_default, last_move = moves_stack.pop()
+                if is_default:
+                    board.cancel_default_move(last_move)
+                else:
+                    board.cancel_last_move(last_move)
 
         return root.best_action()
 

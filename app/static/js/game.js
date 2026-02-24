@@ -323,8 +323,8 @@ class Onitama{
         }
         });
 
-        xhr.open('POST', 'http://127.0.0.1:8080/game');
-        xhr.setRequestHeader('authorization', 'Basic YWRtaW46YWRtaW4=');
+        xhr.open('POST', API_URL+'game');
+        xhr.setRequestHeader('authorization', 'Basic '+API_KEY);
         xhr.setRequestHeader('content-type', 'application/json');
 
         xhr.send(data);
@@ -365,8 +365,8 @@ class Onitama{
         }
         });
 
-        xhr.open('POST', 'http://127.0.0.1:8080/game/TEST/player/play');
-        xhr.setRequestHeader('authorization', 'Basic YWRtaW46YWRtaW4=');
+        xhr.open('POST', API_URL+'game/TEST/player/play');
+        xhr.setRequestHeader('authorization', 'Basic '+API_KEY);
         xhr.setRequestHeader('content-type', 'application/json');
 
         xhr.send(data);
@@ -448,8 +448,8 @@ class Onitama{
         }
         });
 
-        xhr.open('POST', 'http://127.0.0.1:8080/game/TEST/opponent/play');
-        xhr.setRequestHeader('authorization', 'Basic YWRtaW46YWRtaW4=');
+        xhr.open('POST', API_URL+'game/TEST/opponent/play');
+        xhr.setRequestHeader('authorization', 'Basic '+API_KEY);
         xhr.setRequestHeader('content-type', 'application/json');
 
         xhr.send(data);
@@ -460,7 +460,8 @@ class Onitama{
     updateBoard(newTurn, opponent = false, updateCards = true){
         this.calculPositions();
 
-        this.board_num = this.current_state.board;
+        // Copie profonde pour ne pas muter current_state.board
+        this.board_num = this.current_state.board.map(col => [...col]);
 
         this.red_student = 1;
         this.red_master = 2;
@@ -479,15 +480,18 @@ class Onitama{
         this.master_red["ref"].style.display = "none";
         this.master_blue["ref"].style.display = "none";
 
-
-
         if(!this.humanIsPlayerOne){
-            this.board_num.reverse().forEach(row => row.reverse());
-
             this.red_student = 3;
             this.red_master = 4;
             this.blue_student = 1;
             this.blue_master = 2;
+        }
+
+        // Le backend retourne toujours le plateau du point de vue du joueur courant.
+        // Quand c'est le tour de l'IA, le plateau est dans sa perspective (pièces IA en bas).
+        // On le retourne pour toujours afficher du point de vue de l'humain (pièces humain en bas).
+        if(this.current_state.current_player == "IA"){
+            this.board_num.reverse().forEach(row => row.reverse());
         }
 
         let red_i = 0;

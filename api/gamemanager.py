@@ -99,7 +99,7 @@ class GameManager:
         return {
             'game_uid' : self.uid,
             'turn_num' : self.turn_num,
-            'current_player' : "HUMAN" if self.game.current_player == self.pj else "IA",
+            'current_player' : "HUMAN" if self.game.board.current_player == self.pj.position else "IA",
             'player_cards' : self.game.board.current_player_cards,
             'opponent_cards' : self.game.board.next_player_cards,
             'neutral_card' :self.game.board.neutral_card,

@@ -18,6 +18,80 @@ class DataTrainer:
     def close(self, winner:Player):
         pass
 
+#Classe de gestion du buffer pour l'entraînement du réseau en self-play avec PPO
+class PPOBuffer(DataTrainer):
+    # gamma : facteur d'actualisation (proche de 1 = récompenses futures comptent beaucoup)
+    # lam   : facteur lambda pour GAE (0 = TD pur, haute variance ; 1 = Monte Carlo, haut biais)
+    def __init__(self, p1:Player, p2:Player, gamma:float=0.99, lam:float=0.95):
+        super().__init__()
+        self.p1 = p1
+        self.p2 = p2
+        self.gamma = gamma
+        self.lam = lam
+        self._clear()
+
+    def _clear(self):
+        self.states = []    #(5,5,10) état vu du joueur courant
+        self.actions = []   #int : index flat de l'action
+        self.probabilities = [] # P(action|state) au moment de la collecte
+        self.values = []    #V(s) estimé par le réseau
+
+        self._traj_start = 0 #Pointeur du début de la trajectoire en cours (partie)
+
+    # Enregistre une expérience, c'est à dire un couple état / action (met en cache)
+    # player:Player : joueur
+    # state:list[5:5:10] : Etat (Matrice de 5x5x10)
+    # action:list(rel_x:int, rel_y:int, move_idx:int) : Action 
+    # probability:float : Probabilité de 'laction sous la politique courante
+    # value:float : Estimation de V(s)
+    def save_experience(self, player:Player, state:list, action:list, probability:float, value:float):
+        super().save_experience(player, state)
+    
+        self.states.append(state)
+
+        col, row = action.from_pos
+        flat_idx = col * 260 + row * 52 + action.move_idx
+        self.actions.append(flat_idx)
+
+        self.probabilities.append(probability)
+        self.values.append(value)
+
+    
+    # termine la trajectoire et calcule GAE
+    def close(self, winner):
+        super().close(winner)
+
+        winner_reward = 0
+        if winner == self.p1:
+            winner_reward = 1
+        elif winner == self.p2:
+            winner_reward = -1
+
+        #On récupère les états et valeurs de la trajectoire, càd la partie en cours
+        traj = slice(self._traj_start, len(self.states))
+        values = np.array(self.values[traj], dtype=np.float32)
+
+        #0 à chaque pas, winner_reward uniquement au dernier
+        rewards = np.zeros(len(values), dtype=np.float32)
+        rewards[-1] = winner_reward
+
+        #Calcul de delta_T : V(s_{T+1}) = last_value (on ajoute une valeur pour que le calcul à T+1 soit toujours juste)
+        values_ext = np.append(values, 0.0)
+
+        #GAE
+        # delta_t = r_t + gamma * V(s_{t+1}) - V(s_t)   ← erreur TD
+        # A_t     = delta_t + (gamma * lam) * A_{t+1}   ← avantage lissé
+        advantages = np.zeros(len(rewards), dtype=np.float32)
+
+    
+    # retourne les données sous forme de tensors et vide le buffer
+    def get(self):
+        pass
+
+
+    
+
+
 # Classe permettant la gestion des parties visant à générer des données d'entraînement
 class RegularDataTrainer(DataTrainer):
     #Méthodes statiques
@@ -132,40 +206,30 @@ if __name__ == "__main__":
     
     training_plan = [
         (
-            LookAheadHeuristicPlayer(max_depth=2, heuristic_function="heuristic_aggressive"),
-            LookAheadHeuristicPlayer(max_depth=2, heuristic_function="heuristic_defensive"),
-            "agressive2-vs-defensive2"
-        ),
-        (
-            LookAheadHeuristicPlayer(max_depth=2),
-            LookAheadHeuristicPlayer(max_depth=2, heuristic_function="heuristic_defensive"),
-            "regular2-vs-defensive2"
-        ),
-        (
-            LookAheadHeuristicPlayer(max_depth=2, heuristic_function="heuristic_aggressive"),
-            LookAheadHeuristicPlayer(max_depth=2, heuristic_function="heuristic_mobility"),
-            "agressive2-vs-mobility2"
-        ),
-        (
-            LookAheadHeuristicPlayer(max_depth=2, heuristic_function="heuristic_positional"),
-            LookAheadHeuristicPlayer(max_depth=2, heuristic_function="heuristic_mobility"),
-            "positional2-vs-mobility2"
-        ),
-        (
-            LookAheadHeuristicPlayer(max_depth=2, heuristic_function="heuristic_noisy"),
-            LookAheadHeuristicPlayer(max_depth=2, heuristic_function="heuristic_mobility"),
-            "noisy2-vs-mobility2"
-        ),
-        (
-            LookAheadHeuristicPlayer(max_depth=2, heuristic_function="heuristic_noisy"),
-            LookAheadHeuristicPlayer(max_depth=2, heuristic_function="heuristic_positional"),
-            "noisy2-vs-positional2"
-        ),
-        (
+            LookAheadHeuristicPlayer(max_depth=3, heuristic_function="heuristic_aggressive"),
             LookAheadHeuristicPlayer(max_depth=3, heuristic_function="heuristic_defensive"),
-            LookAheadHeuristicPlayer(max_depth=3, heuristic_function="heuristic_positional"),
-            "defensive2-vs-positional2"
+            "agressive3-vs-defensive3"
         ),
+        (
+            LookAheadHeuristicPlayer(max_depth=3, heuristic_function="heuristic_aggressive"),
+            LookAheadHeuristicPlayer(max_depth=3, heuristic_function="heuristic_mobility"),
+            "agressive3-vs-mobility3"
+        ),
+        (
+            LookAheadHeuristicPlayer(max_depth=3, heuristic_function="heuristic_aggressive"),
+            LookAheadHeuristicPlayer(max_depth=3, heuristic_function="heuristic_positional"),
+            "agressive3-vs-positional3"
+        ),
+        (
+            LookAheadHeuristicPlayer(max_depth=3, heuristic_function="heuristic_aggressive"),
+            LookAheadHeuristicPlayer(max_depth=3, heuristic_function="heuristic_regular"),
+            "agressive3-vs-regular3"
+        ),
+        (
+            LookAheadHeuristicPlayer(max_depth=3, heuristic_function="heuristic_aggressive"),
+            LookAheadHeuristicPlayer(max_depth=2, heuristic_function="heuristic_defensive"),
+            "agressive3-vs-defensive2"
+        )
     ]
 
     i = 1
@@ -181,7 +245,7 @@ if __name__ == "__main__":
             y_file_destination=f"../data/{filename}-actions.pkl",
             override=True
         )
-        gameSession = GameSession(player_one=p1, player_two=p2, number_of_games=5000, trainer=trainer)
+        gameSession = GameSession(player_one=p1, player_two=p2, number_of_games=10000, trainer=trainer)
         gameSession.start()
         print(gameSession.getStats())
 

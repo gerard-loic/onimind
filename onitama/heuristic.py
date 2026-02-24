@@ -60,7 +60,7 @@ class HeuristicEvaluation:
         if game_ended:
             return 1000 if winner == ctx['p1'] else -1000
 
-        p1_students, p2_students, p1_master_pos, p2_master_pos = board._count_pieces(ctx)
+        p1_students, p2_students, p1_master_pos, p2_master_pos = HeuristicEvaluation._count_pieces(board, ctx)
 
         # Différence d'étudiants (bonus augmenté pour captures)
         score_captures = (len(p1_students) - len(p2_students)) * 150

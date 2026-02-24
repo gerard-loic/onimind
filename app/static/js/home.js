@@ -18,8 +18,8 @@ class Home{
             }
         });
 
-        xhr.open('GET', 'http://127.0.0.1:8080/players');
-        xhr.setRequestHeader('authorization', 'Basic YWRtaW46YWRtaW4=');
+        xhr.open('GET', API_URL+'players');
+        xhr.setRequestHeader('authorization', 'Basic '+API_KEY);
         xhr.setRequestHeader('content-type', 'application/json');
 
         xhr.send(data);
