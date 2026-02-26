@@ -103,12 +103,17 @@ class Game:
             
             #On fait jouer le joueur
             ts_before = int(time.time() * 1000)
-            action = self.current_player.play(board=self.board)
+            result = self.current_player.play(board=self.board)
+            #Dans le cas d'un entraînement PPO, retourne 3 valeurs
+            if type(result) is tuple:
+                action, log_prob, value = result
+            else:
+                action, log_prob, value = result, None, None
             ts_after = int(time.time() * 1000)
 
             #On retourne l'information au trainer (si défini)
             if self.trainer:
-                self.trainer.save_experience(player=self.current_player, state=state, action=[action.from_pos[0], action.from_pos[1], action.move_idx])
+                self.trainer.save_experience(player=self.current_player, state=state, action=action, log_prob=log_prob, value=value)
 
             #On réalise l'action (uniquement si action possible)
             if action is not None:
@@ -232,13 +237,15 @@ if __name__ == "__main__":
     #p2 = CNNPlayer()
     #p2.load_weights("../saved-models/CNNPlayer-withdropout-weights.weights.h5")
     #p2.load_weights("../saved-models/CNNPlayer-withdropout-augmented-weights.weights.h5")
+    p1 = CNNPlayer_v2()
+    p1.load_weights('../saved-models/CNNPlayer-v1-withdropout-datalarge-dropout-weights.weights.h5')
 
-    p1 = HeuristicPlayer(heuristic_function="heuristic_defensive")
-    p2 = RandomPlayer()
+    #p2 = HeuristicPlayer(heuristic_function="heuristic_defensive")
+    p2 = LookAheadHeuristicPlayer(heuristic_function="heuristic_defensive", max_depth=2)
 
-    game = Game(verbose=True, player_one=p1, player_two=p2)
-    game.playGame()
+    #game = Game(verbose=True, player_one=p1, player_two=p2)
+    #game.playGame()
 
-    #gameSession = GameSession(player_one=p4, player_two=p3, number_of_games=100)
-    #gameSession.start()
-    #print(gameSession.getStats())
+    gameSession = GameSession(player_one=p1, player_two=p2, number_of_games=100)
+    gameSession.start()
+    print(gameSession.getStats())

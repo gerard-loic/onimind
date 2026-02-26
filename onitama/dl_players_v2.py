@@ -49,8 +49,8 @@ class CNNPlayer_v2(Player):
 
     # Constructeur
     # dropout_rate:float : % de dropout
-    # with_heuristic:bool : ???
-    def __init__(self, dropout_rate:float=0.4, with_heuristic:bool=False):
+    # with_ppo:bool : si true, utilisé dans le cadre d'un entraînement avec PPO
+    def __init__(self, dropout_rate:float=0.4, with_ppo:bool=False):
         super().__init__()
         self.name = "CNNPlayer"
 
@@ -60,7 +60,7 @@ class CNNPlayer_v2(Player):
         self.n_residual_blocs = 5   #Nombre de blocs résiduels
         self.n_moves = 52
         self.dropout_rate = dropout_rate  #Taux de dropout pour la régularisation
-        self.with_heuristic = with_heuristic #Si TRUE : exploite les meilleures actions retournées pour essayer de déterminer celle qui est vraiment meilleure
+        self.with_ppo = with_ppo    #Si TRUE : utilisé dans le cadre d'un entraînement avec PPO
 
         #Construction du réseau
         self.model = self._build_model()
@@ -83,6 +83,7 @@ class CNNPlayer_v2(Player):
 
         #On effectue la prédiction
         policy_logits, value = self.predict(state, training=False)
+        # value = float entre -1 (position perdue) et +1 (position gagnée)
         policy_logits = np.array(policy_logits).flatten()  # (1300,)
 
         #Créer un masque des actions valides
@@ -91,7 +92,6 @@ class CNNPlayer_v2(Player):
 
         #Pour chaque action valide, on conserve le logit correspondant
         action_to_move = {}  # flat_idx -> Action (pour retrouver l'action après)
-        #TODO : implémeter le get flat index dans l'action ?
         for action in available_moves:
             col, row = action.from_pos
             move_idx = action.move_idx
@@ -102,31 +102,26 @@ class CNNPlayer_v2(Player):
 
         #Appliquer softmax pour obtenir les probabilités
         probs = self._softmax(masked_logits)
-
-        #@TODO Ne Semble pas vraiment meilleur
-        if self.with_heuristic:
-            #Si on utilise les heuristiques, on prend uniquement l'action 
-            # qui donne le meilleur score après avoir été jouée sur les 5 meilleiure
-            best_flat_idx = np.argsort(probs)[-5:]
-            best_score = float('-inf')
-            best_action = None
-            for idx in best_flat_idx:
-                if idx in action_to_move:
-                    action_tested = action_to_move[idx]
-                    #On applique l'action
-                    action_log = board.play_move(action=action_tested)
-                    score = board.heuristic_evaluation(from_current_player_point_of_view=False)
-                    #On annule
-                    board.cancel_last_move(last_move=action_log)
-                    if score > best_score:
-                        best_action = action_tested
-            return best_action
+            
+        if self.with_ppo:
+            #En PPO on échantillonne depuis la distribution
+            p = probs / probs.sum() #Normalisation pour éviter un crash si ne fait pas exactement 1
+            best_flat_idx = np.random.choice(len(probs), p=p)
+            #Pour éviter qu'on choisisse malgré tout une action avec une probabilité quasi nulle
+            if best_flat_idx not in action_to_move:
+                best_flat_idx = np.argmax(probs)  # fallback greedy
+            #log de la probabilité de l'action choisie (pour PPO)
+            log_prob = np.log(probs[best_flat_idx] + 1e-8)
         else:
             #Sélectionner l'action avec la plus haute probabilité
             best_flat_idx = np.argmax(probs)
-            best_action = action_to_move[best_flat_idx]
+        
+        best_action = action_to_move[best_flat_idx]
 
-        return best_action
+        if self.with_ppo:
+            return best_action, log_prob, float(value.numpy()[0][0])
+        else:
+            return best_action
 
     def _softmax(self, x):
         """Softmax stable numériquement (gère les -inf)"""

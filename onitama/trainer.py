@@ -12,7 +12,7 @@ class DataTrainer:
     def __init__(self):
         pass
 
-    def save_experience(self, player:Player, state:list):
+    def save_experience(self, player:Player, state:list, action:list, log_prob:float, value:float):
         pass
 
     def close(self, winner:Player):
@@ -31,11 +31,12 @@ class PPOBuffer(DataTrainer):
         self._clear()
 
     def _clear(self):
-        self.states = []    #(5,5,10) état vu du joueur courant
-        self.actions = []   #int : index flat de l'action
-        self.probabilities = [] # P(action|state) au moment de la collecte
-        self.values = []    #V(s) estimé par le réseau
-
+        self.states = []    #(5,5,10) état vu du joueur courant (ou input du réseau)
+        self.actions = []   #int : index flat de l'action (savoir quelle action évaluer)
+        self.log_probs = [] # P(action|state) au moment de la collecte (utilisé pour calculer le ration PPO)
+        self.values = []    #V(s) estimé par le réseau (utilisé pour calculer GAE)
+        self.advantages = [] # float - calculé dans close() (utilisé pour loss policy PPO)
+        self.returns = [] #float - calculé dans close() (cible pour la value head)
         self._traj_start = 0 #Pointeur du début de la trajectoire en cours (partie)
 
     # Enregistre une expérience, c'est à dire un couple état / action (met en cache)
@@ -44,23 +45,25 @@ class PPOBuffer(DataTrainer):
     # action:list(rel_x:int, rel_y:int, move_idx:int) : Action 
     # probability:float : Probabilité de 'laction sous la politique courante
     # value:float : Estimation de V(s)
-    def save_experience(self, player:Player, state:list, action:list, probability:float, value:float):
-        super().save_experience(player, state)
+    def save_experience(self, player:Player, state:list, action:list, log_prob:float, value:float):
+        super().save_experience(player, state, action, log_prob, value)
     
-        self.states.append(state)
+        if player == self.p1:
+            self.states.append(state)
 
-        col, row = action.from_pos
-        flat_idx = col * 260 + row * 52 + action.move_idx
-        self.actions.append(flat_idx)
+            col, row = action.from_pos
+            flat_idx = col * 260 + row * 52 + action.move_idx
+            self.actions.append(flat_idx)
 
-        self.probabilities.append(probability)
-        self.values.append(value)
+            self.log_probs.append(log_prob)
+            self.values.append(value)
 
     
     # termine la trajectoire et calcule GAE
     def close(self, winner):
         super().close(winner)
 
+        #Score en foncion du gagnant
         winner_reward = 0
         if winner == self.p1:
             winner_reward = 1
@@ -82,11 +85,53 @@ class PPOBuffer(DataTrainer):
         # delta_t = r_t + gamma * V(s_{t+1}) - V(s_t)   ← erreur TD
         # A_t     = delta_t + (gamma * lam) * A_{t+1}   ← avantage lissé
         advantages = np.zeros(len(rewards), dtype=np.float32)
+        gae = 0.0
+        #Etape 1 : on remonte le temps depuis le dernier coup de la partie vers le premier
+        for t in reversed(range(len(rewards))):
+            #On calcule la différence entre ce que le réseau estimait et ce qu'on obtenu. 
+            #On a donc un delta positif quand le réseau était trop optimiste, négatif quand il était pessimiste
+            #Gamma pondère combien on fait confiance à la valeur du prochain état pour estimer si le coup était bon
+            # C'est à dire ici le delta c'est la récompense immédiate + la veleur future pondérée par gamma - ce que le réseau pensait comme valeur pour cet état
+            # Concrètement, plus une victoire est lointaine (donc le gain lointain, plus la pondération est faible)
+            delta = rewards[t] + self.gamma * values_ext[t+1] - values_ext[t]
+            
+            #On calcule l'avantage cumulé, recalculé pour chaque t
+            #Donc à t=0 : somme pondérée de toutes les erreurs TD (temporal difference) futures avec un poids qui décroit exponentiellement
+            #Temporal diffrence : idée fondamentale : estimer la valeur d'un état en se basant sur l'état suivant sans attendre la fin de la partir
+            #C'est le rôle de lam (TD pur lam=0, MonteCarlo lam=1, GAE  lam=0.96 c'est une interpolation entre TD et MOnteCarlo)
+            gae = delta + self.gamma * self.lam * gae
+            advantages[t] = gae
+        
+        #Return = cible pour la value head
+        # C'est à dire ce que le réseau aurait du prédire
+        returns = advantages + values
+
+        self.advantages.extend(advantages.tolist())
+        self.returns.extend(returns.tolist())
+        self._traj_start = len(self.states)
 
     
     # retourne les données sous forme de tensors et vide le buffer
-    def get(self):
-        pass
+    def get(self)->dict:
+        data = {
+            'states' : np.array(self.states, dtype=np.float32), #(10, 5, 5)
+            'actions' : np.array(self.actions, dtype=np.int32),
+            'log_probs' : np.array(self.log_probs, dtype=np.float32),
+            'values' : np.array(self.values, dtype=np.float32),
+            'advantages' : np.array(self.advantages, dtype=np.float32),
+            'returns' : np.array(self.returns, np.float32)
+        }
+
+        #Normalisation des avantages, permet de stabiliser les dradients PPO
+        adv = data['advantages']
+        data['advantages'] = (adv - adv.mean()) / (adv.std() + 1e-8)
+
+        self._clear()
+        return data
+    
+    def __len__(self):
+        return len(self.states)
+    
 
 
     
@@ -156,10 +201,12 @@ class RegularDataTrainer(DataTrainer):
     # player:Player : joueur
     # state:list[5:5:10] : Etat (Matrice de 5x5x10)
     # action:list(rel_x:int, rel_y:int, move_idx:int) : Action 
-    def save_experience(self, player:Player, state:list, action:list):
-        super().save_experience(player, state)
+    def save_experience(self, player:Player, state:list, action:list, log_prob:float, value:float):
+        super().save_experience(player, state, action, log_prob, value)
 
         t = np.array(state)
+
+        action = [action.from_pos[0], action.from_pos[1], action.move_idx]
 
         # Mise en cache
         if (player == self.p1 and self.p1_record):
@@ -206,10 +253,11 @@ if __name__ == "__main__":
     
     training_plan = [
         (
-            LookAheadHeuristicPlayer(max_depth=3, heuristic_function="heuristic_aggressive"),
-            LookAheadHeuristicPlayer(max_depth=3, heuristic_function="heuristic_defensive"),
-            "agressive3-vs-defensive3"
+            LookAheadHeuristicPlayer(max_depth=1, heuristic_function="heuristic_aggressive"),
+            LookAheadHeuristicPlayer(max_depth=1, heuristic_function="heuristic_defensive"),
+            "test"
         ),
+        """
         (
             LookAheadHeuristicPlayer(max_depth=3, heuristic_function="heuristic_aggressive"),
             LookAheadHeuristicPlayer(max_depth=3, heuristic_function="heuristic_mobility"),
@@ -230,6 +278,7 @@ if __name__ == "__main__":
             LookAheadHeuristicPlayer(max_depth=2, heuristic_function="heuristic_defensive"),
             "agressive3-vs-defensive2"
         )
+        """
     ]
 
     i = 1
@@ -245,7 +294,7 @@ if __name__ == "__main__":
             y_file_destination=f"../data/{filename}-actions.pkl",
             override=True
         )
-        gameSession = GameSession(player_one=p1, player_two=p2, number_of_games=10000, trainer=trainer)
+        gameSession = GameSession(player_one=p1, player_two=p2, number_of_games=5000, trainer=trainer)
         gameSession.start()
         print(gameSession.getStats())
 

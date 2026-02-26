@@ -19,6 +19,7 @@ def top_k_accuracy(k):
     return metric
 
 # V3 du joueur utilisant un réseau de neurones
+# MOINS EFFICACE
 # Modifications par rapport à V2 :
 # - Moins de filtres (64 au lieu de 128)
 # - Moins de blocs résiduels (2 au lieu de 5)
