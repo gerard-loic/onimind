@@ -31,13 +31,23 @@ class PPOBuffer(DataTrainer):
         self._clear()
 
     def _clear(self):
-        self.states = []    #(5,5,10) état vu du joueur courant (ou input du réseau)
-        self.actions = []   #int : index flat de l'action (savoir quelle action évaluer)
-        self.log_probs = [] # P(action|state) au moment de la collecte (utilisé pour calculer le ration PPO)
-        self.values = []    #V(s) estimé par le réseau (utilisé pour calculer GAE)
+        #(5,5,10) état vu du joueur courant (ou input du réseau)
+        #int : index flat de l'action (savoir quelle action évaluer)
+        # P(action|state) au moment de la collecte (utilisé pour calculer le ration PPO)
+         #V(s) estimé par le réseau (utilisé pour calculer GAE)
+        self.p1_states, self.p1_actions, self.p1_log_probs, self.p1_values = [], [], [], []
+        self.p2_states, self.p2_actions, self.p2_log_probs, self.p2_values = [], [], [], []
+
+        self._traj_start_p1 = 0 #Pointeur du début de la trajectoire en cours (partie)
+        self._traj_start_p2 = 0 #Pointeur du début de la trajectoire en cours (partie)
+
+        #Listes fusionnées (p1 + p2, remplies dans close)
+        self.states = []
+        self.actions = []
+        self.log_probs = []
         self.advantages = [] # float - calculé dans close() (utilisé pour loss policy PPO)
         self.returns = [] #float - calculé dans close() (cible pour la value head)
-        self._traj_start = 0 #Pointeur du début de la trajectoire en cours (partie)
+
 
     # Enregistre une expérience, c'est à dire un couple état / action (met en cache)
     # player:Player : joueur
@@ -48,15 +58,22 @@ class PPOBuffer(DataTrainer):
     def save_experience(self, player:Player, state:list, action:list, log_prob:float, value:float):
         super().save_experience(player, state, action, log_prob, value)
     
+        #Transposition
+        state_t = np.transpose(np.array(state), (1, 2, 0))
+
+        col, row = action.from_pos
+        flat_idx = col * 260 + row * 52 + action.move_idx
+
         if player == self.p1:
-            self.states.append(state)
-
-            col, row = action.from_pos
-            flat_idx = col * 260 + row * 52 + action.move_idx
-            self.actions.append(flat_idx)
-
-            self.log_probs.append(log_prob)
-            self.values.append(value)
+            self.p1_states.append(state_t)
+            self.p1_actions.append(flat_idx)
+            self.p1_log_probs.append(log_prob)
+            self.p1_values.append(value)
+        else:
+            self.p2_states.append(state_t)
+            self.p2_actions.append(flat_idx)
+            self.p2_log_probs.append(log_prob)
+            self.p2_values.append(value)
 
     
     # termine la trajectoire et calcule GAE
@@ -64,15 +81,37 @@ class PPOBuffer(DataTrainer):
         super().close(winner)
 
         #Score en foncion du gagnant
-        winner_reward = 0
         if winner == self.p1:
-            winner_reward = 1
+            p1_reward, p2_reward = 1.0, -1.0
         elif winner == self.p2:
-            winner_reward = -1
+            p1_reward, p2_reward = -1.0, 1.0
+        else:
+            p1_reward, p2_reward = 0.0, 0.0
 
-        #On récupère les états et valeurs de la trajectoire, càd la partie en cours
-        traj = slice(self._traj_start, len(self.states))
-        values = np.array(self.values[traj], dtype=np.float32)
+        #Calcul GAE pour p1 et p2
+        adv_p1, ret_p1 = self._compute_gae(self.p1_values, self._traj_start_p1, p1_reward)
+        adv_p2, ret_p2 = self._compute_gae(self.p2_values, self._traj_start_p2, p2_reward)
+        
+        #Fusion dans les listes finales
+        self.states.extend(self.p1_states[self._traj_start_p1:])
+        self.states.extend(self.p2_states[self._traj_start_p2:])
+        self.actions.extend(self.p1_actions[self._traj_start_p1:])
+        self.actions.extend(self.p2_actions[self._traj_start_p2:])
+        self.log_probs.extend(self.p1_log_probs[self._traj_start_p1:])
+        self.log_probs.extend(self.p2_log_probs[self._traj_start_p2:])
+        self.advantages.extend(adv_p1.tolist())
+        self.advantages.extend(adv_p2.tolist())
+        self.returns.extend(ret_p1.tolist())
+        self.returns.extend(ret_p2.tolist())
+
+        #Avancer les pointeurs
+        self._traj_start_p1 = len(self.p1_states)
+        self._traj_start_p2 = len(self.p2_states)
+
+
+    def _compute_gae(self, values_list, traj_start, winner_reward):
+        #On récupère les valeurs de la trajectoire, càd la partie en cours
+        values = np.array(values_list[traj_start:], dtype=np.float32)
 
         #0 à chaque pas, winner_reward uniquement au dernier
         rewards = np.zeros(len(values), dtype=np.float32)
@@ -101,23 +140,17 @@ class PPOBuffer(DataTrainer):
             #C'est le rôle de lam (TD pur lam=0, MonteCarlo lam=1, GAE  lam=0.96 c'est une interpolation entre TD et MOnteCarlo)
             gae = delta + self.gamma * self.lam * gae
             advantages[t] = gae
-        
-        #Return = cible pour la value head
-        # C'est à dire ce que le réseau aurait du prédire
-        returns = advantages + values
 
-        self.advantages.extend(advantages.tolist())
-        self.returns.extend(returns.tolist())
-        self._traj_start = len(self.states)
+        return advantages, advantages + values  # (advantages, returns)
+
 
     
     # retourne les données sous forme de tensors et vide le buffer
     def get(self)->dict:
         data = {
-            'states' : np.array(self.states, dtype=np.float32), #(10, 5, 5)
+            'states' : np.array(self.states, dtype=np.float32), #(N,, 5, 5, 10)
             'actions' : np.array(self.actions, dtype=np.int32),
             'log_probs' : np.array(self.log_probs, dtype=np.float32),
-            'values' : np.array(self.values, dtype=np.float32),
             'advantages' : np.array(self.advantages, dtype=np.float32),
             'returns' : np.array(self.returns, np.float32)
         }

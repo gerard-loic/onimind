@@ -31,6 +31,7 @@ class Game:
         self.timesP2 = []
         self.trainer = trainer
 
+
         self.player_one = player_one
         self.player_two = player_two
 
@@ -98,7 +99,7 @@ class Game:
                     return 0  # Match nul
                 break
 
-            if self.trainer:
+            if self.trainer is not None:
                 state = self.board.get_state()
             
             #On fait jouer le joueur
@@ -112,7 +113,7 @@ class Game:
             ts_after = int(time.time() * 1000)
 
             #On retourne l'information au trainer (si défini)
-            if self.trainer:
+            if self.trainer is not None and action is not None:
                 self.trainer.save_experience(player=self.current_player, state=state, action=action, log_prob=log_prob, value=value)
 
             #On réalise l'action (uniquement si action possible)
@@ -132,8 +133,7 @@ class Game:
 
             #Si le jeu est terminé
             if game_ended:
-
-                if self.trainer:
+                if self.trainer is not None:
                     if winner == self.player_one.position:
                         self.trainer.close(winner=self.player_one)
                     else:
@@ -164,6 +164,7 @@ class Game:
                     return action
                     
                 return None
+
 
 
 # Joue un nombre défini de parties
@@ -239,6 +240,20 @@ if __name__ == "__main__":
     #p2.load_weights("../saved-models/CNNPlayer-withdropout-augmented-weights.weights.h5")
     p1 = CNNPlayer_v2()
     p1.load_weights('../saved-models/CNNPlayer-v1-withdropout-datalarge-dropout-weights.weights.h5')
+
+    #p2 = HeuristicPlayer(heuristic_function="heuristic_defensive")
+    p2 = LookAheadHeuristicPlayer(heuristic_function="heuristic_defensive", max_depth=2)
+
+    #game = Game(verbose=True, player_one=p1, player_two=p2)
+    #game.playGame()
+
+    gameSession = GameSession(player_one=p1, player_two=p2, number_of_games=100)
+    gameSession.start()
+    print(gameSession.getStats())
+
+
+    p1 = CNNPlayer_v2()
+    p1.load_weights('../saved-models/ppo-v2_iter10.weights.h5')
 
     #p2 = HeuristicPlayer(heuristic_function="heuristic_defensive")
     p2 = LookAheadHeuristicPlayer(heuristic_function="heuristic_defensive", max_depth=2)

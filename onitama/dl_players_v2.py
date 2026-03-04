@@ -49,8 +49,7 @@ class CNNPlayer_v2(Player):
 
     # Constructeur
     # dropout_rate:float : % de dropout
-    # with_ppo:bool : si true, utilisé dans le cadre d'un entraînement avec PPO
-    def __init__(self, dropout_rate:float=0.4, with_ppo:bool=False):
+    def __init__(self, dropout_rate:float=0.4):
         super().__init__()
         self.name = "CNNPlayer"
 
@@ -60,7 +59,7 @@ class CNNPlayer_v2(Player):
         self.n_residual_blocs = 5   #Nombre de blocs résiduels
         self.n_moves = 52
         self.dropout_rate = dropout_rate  #Taux de dropout pour la régularisation
-        self.with_ppo = with_ppo    #Si TRUE : utilisé dans le cadre d'un entraînement avec PPO
+        self.with_ppo = False    #Si TRUE : utilisé dans le cadre d'un entraînement avec PPO
 
         #Construction du réseau
         self.model = self._build_model()
@@ -68,6 +67,8 @@ class CNNPlayer_v2(Player):
         # Garder des références aux différentes parties du réseau
         self._identify_heads()
 
+    def setPPOTraining(self, with_ppo:bool):
+        self.with_ppo = with_ppo
 
     def play(self, board:Board):
         #On récupère le state
