@@ -238,28 +238,31 @@ if __name__ == "__main__":
     #p2 = CNNPlayer()
     #p2.load_weights("../saved-models/CNNPlayer-withdropout-weights.weights.h5")
     #p2.load_weights("../saved-models/CNNPlayer-withdropout-augmented-weights.weights.h5")
-    p1 = CNNPlayer_v2()
-    p1.load_weights('../saved-models/CNNPlayer-v1-withdropout-datalarge-dropout-weights.weights.h5')
+    #p1 = CNNPlayer_v2()
+    #p1.load_weights('../saved-models/CNNPlayer-v1-withdropout-datalarge-dropout-weights.weights.h5')
 
     #p2 = HeuristicPlayer(heuristic_function="heuristic_defensive")
-    p2 = LookAheadHeuristicPlayer(heuristic_function="heuristic_defensive", max_depth=2)
+    #p2 = LookAheadHeuristicPlayer(heuristic_function="heuristic_defensive", max_depth=2)
 
     #game = Game(verbose=True, player_one=p1, player_two=p2)
     #game.playGame()
 
-    gameSession = GameSession(player_one=p1, player_two=p2, number_of_games=100)
-    gameSession.start()
-    print(gameSession.getStats())
+    #gameSession = GameSession(player_one=p1, player_two=p2, number_of_games=100)
+    #gameSession.start()
+    #print(gameSession.getStats())
 
 
-    p1 = CNNPlayer_v2()
-    p1.load_weights('../saved-models/ppo-v2_iter10.weights.h5')
+    #p1 = CNNPlayer_v2()
+    #p1.load_weights('../saved-models/ppo-v2_iter10.weights.h5')
 
     #p2 = HeuristicPlayer(heuristic_function="heuristic_defensive")
-    p2 = LookAheadHeuristicPlayer(heuristic_function="heuristic_defensive", max_depth=2)
+    #p2 = LookAheadHeuristicPlayer(heuristic_function="heuristic_defensive", max_depth=2)
 
     #game = Game(verbose=True, player_one=p1, player_two=p2)
     #game.playGame()
+
+    p1 = RandomPlayer()
+    p2 = MCTSPlayer()
 
     gameSession = GameSession(player_one=p1, player_two=p2, number_of_games=100)
     gameSession.start()

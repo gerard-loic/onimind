@@ -211,9 +211,10 @@ class LookAheadHeuristicPlayer(Player):
 
 
 class MCTSNode:
-    def __init__(self, parent=None, action=None):
+    def __init__(self, parent=None, action=None, depth=0):
         self.parent = parent
         self.action = action
+        self.depth = depth
         self.children = []
         self.visits = 0
         self.wins = 0
@@ -265,7 +266,7 @@ class MCTSPlayer(Player):
                 last_move = board.play_move(action)
                 moves_stack.append((False, last_move))
 
-                child = MCTSNode(parent=node, action=action)
+                child = MCTSNode(parent=node, action=action, depth=node.depth + 1)
                 child.untried_actions = board.get_available_moves()
                 node.children.append(child)
                 node = child
@@ -292,12 +293,13 @@ class MCTSPlayer(Player):
                 result = 0
 
             # Backpropagation : remonter les résultats en alternant la perspective
-            # Chaque niveau de l'arbre correspond à un joueur différent
-            current_result = result
+            # La perspective de départ dépend de la profondeur du nœud feuille :
+            # - profondeur impaire = original_player a joué pour atteindre ce nœud → current_result = result
+            # - profondeur paire = l'adversaire a joué pour atteindre ce nœud → current_result = 1 - result
+            current_result = result if node.depth % 2 == 1 else 1 - result
             while node is not None:
                 node.visits += 1
                 node.wins += current_result
-                # Alterner le résultat pour le niveau parent (joueur opposé)
                 current_result = 1 - current_result
                 node = node.parent
 
@@ -378,7 +380,7 @@ class MCTSHeuristicPlayer(Player):
                 last_move = board.play_move(action)
                 moves_stack.append((False, last_move))
 
-                child = MCTSNode(parent=node, action=action)
+                child = MCTSNode(parent=node, action=action, depth=node.depth + 1)
                 child.untried_actions = board.get_available_moves()
                 node.children.append(child)
                 node = child
@@ -403,8 +405,8 @@ class MCTSHeuristicPlayer(Player):
             else:
                 result = 0
 
-            # Backpropagation : remonter les résultats en alternant la perspective
-            current_result = result
+            # Backpropagation : perspective de départ selon la profondeur du nœud feuille
+            current_result = result if node.depth % 2 == 1 else 1 - result
             while node is not None:
                 node.visits += 1
                 node.wins += current_result
@@ -476,7 +478,7 @@ class MCTSEvalPlayer(Player):
                 last_move = board.play_move(action)
                 moves_stack.append((False, last_move))
 
-                child = MCTSNode(parent=node, action=action)
+                child = MCTSNode(parent=node, action=action, depth=node.depth + 1)
                 child.untried_actions = board.get_available_moves()
                 node.children.append(child)
                 node = child
@@ -496,8 +498,8 @@ class MCTSEvalPlayer(Player):
                 score = board.heuristic_evaluation(from_current_player_point_of_view=True)
                 result = self._score_to_result(score, original_player, board.current_player)
 
-            # Backpropagation : remonter les résultats en alternant la perspective
-            current_result = result
+            # Backpropagation : perspective de départ selon la profondeur du nœud feuille
+            current_result = result if node.depth % 2 == 1 else 1 - result
             while node is not None:
                 node.visits += 1
                 node.wins += current_result
