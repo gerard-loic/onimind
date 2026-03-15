@@ -12,7 +12,7 @@ class DataTrainer:
     def __init__(self):
         pass
 
-    def save_experience(self, player:Player, state:list, action:list, log_prob:float, value:float):
+    def save_experience(self, player:Player, state:list, action:list, log_prob:float, value:float, valid_mask=None):
         pass
 
     def close(self, winner:Player):
@@ -35,8 +35,8 @@ class PPOBuffer(DataTrainer):
         #int : index flat de l'action (savoir quelle action évaluer)
         # P(action|state) au moment de la collecte (utilisé pour calculer le ration PPO)
          #V(s) estimé par le réseau (utilisé pour calculer GAE)
-        self.p1_states, self.p1_actions, self.p1_log_probs, self.p1_values = [], [], [], []
-        self.p2_states, self.p2_actions, self.p2_log_probs, self.p2_values = [], [], [], []
+        self.p1_states, self.p1_actions, self.p1_log_probs, self.p1_values, self.p1_masks = [], [], [], [], []
+        self.p2_states, self.p2_actions, self.p2_log_probs, self.p2_values, self.p2_masks = [], [], [], [], []
 
         self._traj_start_p1 = 0 #Pointeur du début de la trajectoire en cours (partie)
         self._traj_start_p2 = 0 #Pointeur du début de la trajectoire en cours (partie)
@@ -45,6 +45,7 @@ class PPOBuffer(DataTrainer):
         self.states = []
         self.actions = []
         self.log_probs = []
+        self.masks = []
         self.advantages = [] # float - calculé dans close() (utilisé pour loss policy PPO)
         self.returns = [] #float - calculé dans close() (cible pour la value head)
 
@@ -55,9 +56,13 @@ class PPOBuffer(DataTrainer):
     # action:list(rel_x:int, rel_y:int, move_idx:int) : Action 
     # probability:float : Probabilité de 'laction sous la politique courante
     # value:float : Estimation de V(s)
-    def save_experience(self, player:Player, state:list, action:list, log_prob:float, value:float):
-        super().save_experience(player, state, action, log_prob, value)
-    
+    def save_experience(self, player:Player, state:list, action:list, log_prob:float, value:float, valid_mask=None):
+        super().save_experience(player, state, action, log_prob, value, valid_mask)
+
+        #Joueur non-réseau (heuristique) : pas de log_prob ni value, on n'enregistre pas
+        if log_prob is None:
+            return
+
         #Transposition
         state_t = np.transpose(np.array(state), (1, 2, 0))
 
@@ -69,24 +74,27 @@ class PPOBuffer(DataTrainer):
             self.p1_actions.append(flat_idx)
             self.p1_log_probs.append(log_prob)
             self.p1_values.append(value)
+            self.p1_masks.append(valid_mask)
         else:
             self.p2_states.append(state_t)
             self.p2_actions.append(flat_idx)
             self.p2_log_probs.append(log_prob)
             self.p2_values.append(value)
+            self.p2_masks.append(valid_mask)
 
     
     # termine la trajectoire et calcule GAE
     def close(self, winner):
         super().close(winner)
 
-        #Score en foncion du gagnant
+        #Score en fonction du gagnant
         if winner == self.p1:
             p1_reward, p2_reward = 1.0, -1.0
         elif winner == self.p2:
             p1_reward, p2_reward = -1.0, 1.0
         else:
-            p1_reward, p2_reward = 0.0, 0.0
+            # Joueur alternatif (heuristique) a gagné : p1 a perdu, p2 (CNN) n'a pas d'expériences
+            p1_reward, p2_reward = -1.0, 0.0
 
         #Calcul GAE pour p1 et p2
         adv_p1, ret_p1 = self._compute_gae(self.p1_values, self._traj_start_p1, p1_reward)
@@ -99,6 +107,8 @@ class PPOBuffer(DataTrainer):
         self.actions.extend(self.p2_actions[self._traj_start_p2:])
         self.log_probs.extend(self.p1_log_probs[self._traj_start_p1:])
         self.log_probs.extend(self.p2_log_probs[self._traj_start_p2:])
+        self.masks.extend(self.p1_masks[self._traj_start_p1:])
+        self.masks.extend(self.p2_masks[self._traj_start_p2:])
         self.advantages.extend(adv_p1.tolist())
         self.advantages.extend(adv_p2.tolist())
         self.returns.extend(ret_p1.tolist())
@@ -112,6 +122,11 @@ class PPOBuffer(DataTrainer):
     def _compute_gae(self, values_list, traj_start, winner_reward):
         #On récupère les valeurs de la trajectoire, càd la partie en cours
         values = np.array(values_list[traj_start:], dtype=np.float32)
+
+        #Joueur heuristique : aucune expérience enregistrée, on retourne des tableaux vides
+        if len(values) == 0:
+            empty = np.array([], dtype=np.float32)
+            return empty, empty
 
         #0 à chaque pas, winner_reward uniquement au dernier
         rewards = np.zeros(len(values), dtype=np.float32)
@@ -148,9 +163,10 @@ class PPOBuffer(DataTrainer):
     # retourne les données sous forme de tensors et vide le buffer
     def get(self)->dict:
         data = {
-            'states' : np.array(self.states, dtype=np.float32), #(N,, 5, 5, 10)
+            'states' : np.array(self.states, dtype=np.float32), #(N, 5, 5, 10)
             'actions' : np.array(self.actions, dtype=np.int32),
             'log_probs' : np.array(self.log_probs, dtype=np.float32),
+            'masks' : np.array(self.masks, dtype=np.float32), #(N, 1300) : 0 valide, -1e9 invalide
             'advantages' : np.array(self.advantages, dtype=np.float32),
             'returns' : np.array(self.returns, np.float32)
         }
@@ -198,8 +214,9 @@ class RegularDataTrainer(DataTrainer):
     # save_only_wins:bool : Est ce qu'on enregistre seulement les données des parties où le joueur a gagné
     # x_file_destination:str : Emplacement du fichier de destination des features
     # y_file_destination:str : Emplacement du fichier de destination des labels
+    # v_file_destination:str : Emplacement du fichier de destination des outcomes (±1) pour la value head (optionnel)
     # override:bool : Si le fichier existe déjà on l'écrase
-    def __init__(self, p1:Player, p2:Player, p1_record:bool, p2_record:bool, save_only_wins:bool, x_file_destination:str, y_file_destination:str, override:bool=False):
+    def __init__(self, p1:Player, p2:Player, p1_record:bool, p2_record:bool, save_only_wins:bool, x_file_destination:str, y_file_destination:str, v_file_destination:str=None, override:bool=False):
         super().__init__()
         self.p1 = p1
         self.p2 = p2
@@ -208,20 +225,20 @@ class RegularDataTrainer(DataTrainer):
         self.save_only_wins = save_only_wins
         self.x_file_destination = x_file_destination
         self.y_file_destination = y_file_destination
+        self.v_file_destination = v_file_destination
 
         #Initialisation du cache
         self._init_cache()
 
         #Si suppression
         if override:
-            fichier_x = Path(self.x_file_destination)
-            fichier_y = Path(self.y_file_destination)
-            if fichier_x.exists():
-                fichier_x.unlink()
-                print(f"File {self.x_file_destination} deleted !")
-            if fichier_y.exists():
-                fichier_y.unlink()
-                print(f"File {self.y_file_destination} deleted !")
+            for filepath in [self.x_file_destination, self.y_file_destination, self.v_file_destination]:
+                if filepath is None:
+                    continue
+                f = Path(filepath)
+                if f.exists():
+                    f.unlink()
+                    print(f"File {filepath} deleted !")
 
     # Initialise le cache
     def _init_cache(self):
@@ -229,13 +246,15 @@ class RegularDataTrainer(DataTrainer):
         self.cache_actions_p1 = []
         self.cache_states_p2 = []
         self.cache_actions_p2 = []
+        self.cache_n_steps_p1 = 0  # nombre de pas de la partie en cours pour p1
+        self.cache_n_steps_p2 = 0  # nombre de pas de la partie en cours pour p2
 
     # Enregistre une expérience, c'est à dire un couple état / action (met en cache)
     # player:Player : joueur
     # state:list[5:5:10] : Etat (Matrice de 5x5x10)
     # action:list(rel_x:int, rel_y:int, move_idx:int) : Action 
-    def save_experience(self, player:Player, state:list, action:list, log_prob:float, value:float):
-        super().save_experience(player, state, action, log_prob, value)
+    def save_experience(self, player:Player, state:list, action:list, log_prob:float, value:float, valid_mask=None):
+        super().save_experience(player, state, action, log_prob, value, valid_mask)
 
         t = np.array(state)
 
@@ -245,37 +264,52 @@ class RegularDataTrainer(DataTrainer):
         if (player == self.p1 and self.p1_record):
             self.cache_states_p1.append(state)
             self.cache_actions_p1.append(action)
+            self.cache_n_steps_p1 += 1
         elif (player == self.p2 and self.p2_record):
             self.cache_states_p2.append(state)
             self.cache_actions_p2.append(action)
+            self.cache_n_steps_p2 += 1
 
     # Enregistre les expériences en cache dans le fichier (quand une partie est terminée)
     def close(self, winner:Player):
         super().close(winner)
-    
+
         x_to_write = []
         y_to_write = []
+        v_to_write = []
+
+        # Outcomes du point de vue de chaque joueur
+        # get_state() est perspective-aware : +1 si le joueur courant à cet état a finalement gagné
+        outcome_p1 = +1.0 if winner == self.p1 else -1.0
+        outcome_p2 = +1.0 if winner == self.p2 else -1.0
 
         # Si on enregistre uniquement les parties qui se solvent par une victoire, ne prendre en compte que si le joueur a hgagné
         if self.save_only_wins:
             if winner == self.p1:
                 x_to_write += self.cache_states_p1
                 y_to_write += self.cache_actions_p1
+                v_to_write += [outcome_p1] * self.cache_n_steps_p1
             elif winner == self.p2:
                 x_to_write += self.cache_states_p2
                 y_to_write += self.cache_actions_p2
+                v_to_write += [outcome_p2] * self.cache_n_steps_p2
         else:
             x_to_write += self.cache_states_p1
             x_to_write += self.cache_states_p2
             y_to_write += self.cache_actions_p1
             y_to_write += self.cache_actions_p2
+            v_to_write += [outcome_p1] * self.cache_n_steps_p1
+            v_to_write += [outcome_p2] * self.cache_n_steps_p2
 
         # Enregistrement à la suite du fichier
         with open(self.x_file_destination, 'ab') as f:
             pickle.dump(x_to_write, f)
         with open(self.y_file_destination, 'ab') as f:
             pickle.dump(y_to_write, f)
-        
+        if self.v_file_destination is not None:
+            with open(self.v_file_destination, 'ab') as f:
+                pickle.dump(v_to_write, f)
+
         # On réinitialise le cache
         self._init_cache()
 

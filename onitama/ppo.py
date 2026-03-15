@@ -17,9 +17,13 @@ class PPOTrainer:
             learning_rate:float = 3e-4, #Taux d'apprentissage Adam
             clip_epsilon:float = 0.2, #Borne du cli^pping PPO
             value_coef:float = 0.5, #Poids de la value loss dans la loss totale
-            entropy_coef:float = 0.01, #Poids du bonus d'entropie (exploration)
+            entropy_coef:float = 0.03, #Poids du bonus d'entropie (exploration)
             gamma: float = 0.99,
-            lam:float = 0.85
+            lam:float = 0.85,
+            alternative_players:list = [],  #Joueurs alternatifs utilisés dans le self play
+            alternative_players_ratio:list = [], #Ratio d'utilisation des joueurs alternatifs
+            frozen_teachers:list = [],       #CNNPlayer_v2 à maintenir gelés (copie de player1 toutes les N itérations)
+            teacher_update_every:int = 0     #0 = désactivé, N = mise à jour toutes les N itérations
     ):
         self.player1 = player1
         self.player2 = player2
@@ -31,6 +35,10 @@ class PPOTrainer:
         self.entropy_coef = entropy_coef
         self.gamma = gamma
         self.lam = lam
+        self.alternative_players = alternative_players
+        self.alternative_players_ratio = alternative_players_ratio
+        self.frozen_teachers = frozen_teachers
+        self.teacher_update_every = teacher_update_every
 
         #Initialisation de l'optimizeur
         self.optimizer = tf.keras.optimizers.Adam(learning_rate)
@@ -50,12 +58,28 @@ class PPOTrainer:
         buffer = PPOBuffer(p1=p1, p2=p2, gamma=self.gamma, lam=self.lam)
         self.wins = self.losses = self.draws = 0
 
-        for _ in tqdm(range(self.n_games), desc="self-play"):
-            game = Game(player_one=p1, player_two=p2, verbose=False, trainer=buffer)
-            result = game.playGame(return_winner=True)
-            if result == 1: self.wins += 1
-            elif result == 2: self.losses += 1
-            else: self.draws += 1
+        seuils = []
+        players = []
+        cumul = 0
+        for r in self.alternative_players_ratio:
+            cumul += r * self.n_games // 100
+            seuils.append(cumul)
+        seuils.append(self.n_games)
+
+        for p in self.alternative_players:
+            players.append(p)
+        players.append(p2)
+
+        for i in tqdm(range(self.n_games), desc="self-play"):
+            for j, seuil in enumerate(seuils):
+                if i < seuil:
+                    player = players[j]
+                    game = Game(player_one=p1, player_two=player, verbose=False, trainer=buffer)
+                    result = game.playGame(return_winner=True)
+                    if result == 1: self.wins += 1
+                    elif result == 2: self.losses += 1
+                    else: self.draws += 1
+                    break
 
         return buffer.get()
     
@@ -75,6 +99,7 @@ class PPOTrainer:
                 states = tf.constant(data['states'][batch_idx]) #Etats du mini batch
                 actions = tf.cast(data['actions'][batch_idx], tf.int32) #Actions du mini batch
                 old_lp = tf.constant(data['log_probs'][batch_idx]) #log-proba de l'ancienne politique (ref PPO pour calculer le ratio r_t = exp(new_lp - old_lp))
+                masks = tf.constant(data['masks'][batch_idx]) #Masque des actions valides (0=valide, -1e9=invalide)
                 advantages = tf.constant(data['advantages'][batch_idx]) #Avantages estimés via GAE. Indique si l'action prise était meilleure ou pire qu'attendu
                 returns = tf.constant(data['returns'][batch_idx]) #Retours cibles pour la value fonction (somme des récompenses actualisées)
 
@@ -84,10 +109,13 @@ class PPOTrainer:
                     #Forward pass du réseau de neurones sur le minibatch (retourne les deux têtes du réseau)
                     #policy_logits : [batch, n_actions] scores bruts pour chaque action avant softmax
                     #values : [batch, 1] estimation de la valeur de l'état
-                    policy_logits, values = self.player1.model(states, training=True)
+                    policy_logits, values = self.player1.model(states, training=False)
 
-                    #log-probs de toutes les actions
-                    log_probs_all = tf.nn.log_softmax(policy_logits, axis=-1) #(batch, 1300)
+                    #Appliquer le masque pour ne considérer que les actions valides (cohérent avec la collecte)
+                    masked_logits = policy_logits + masks
+
+                    #log-probs sur la distribution masquée uniquement
+                    log_probs_all = tf.nn.log_softmax(masked_logits, axis=-1) #(batch, 1300)
 
                     #Extraire le log-prob de l'action effectivement jouée
                     batch_size = tf.shape(states)[0]
@@ -99,8 +127,10 @@ class PPOTrainer:
 
                     #Ratio  π_new / π_old
                     #CAD calcule le ratio de probabilité entre la nouvelle et l'ancienne politique
-                    #On utilise exp pour la stabilité numérique. (si nouvelle politique est la mm que l'ancienne, ratio=1)
-                    ratio = tf.exp(new_log_probs - old_lp)
+                    #On clippe le log-ratio avant exp pour éviter les explosions numériques
+                    #(exp(20) ≈ 5×10^8, exp(4) ≈ 55 : borne suffisante pour PPO)
+                    log_ratio = tf.clip_by_value(new_log_probs - old_lp, -4.0, 4.0)
+                    ratio = tf.exp(log_ratio)
 
                     #Policy loss PPO clippée
                     #Contrainte de ratio dans l'intervale [1 - ε, 1 + ε]
@@ -115,8 +145,8 @@ class PPOTrainer:
                     values = tf.squeeze(values, axis=-1)
                     value_loss = tf.reduce_mean(tf.square(values - returns))
 
-                    #Entropie (encourage l'exploration)
-                    probs = tf.nn.softmax(policy_logits, axis=-1)
+                    #Entropie sur la distribution masquée (exploration sur actions valides uniquement)
+                    probs = tf.nn.softmax(masked_logits, axis=-1)
                     entropy = -tf.reduce_mean(tf.reduce_sum(probs * log_probs_all, axis=-1))
 
                     #Losse combinée avec les deux hyperparamètres d'équilibre 
@@ -124,6 +154,7 @@ class PPOTrainer:
                     #On soustrait l'entropie car on minimise la loss — soustraire l'entropie revient à la maximiser.
 
                 grads = tape.gradient(total_loss, self.player1.model.trainable_variables)
+                grads, _ = tf.clip_by_global_norm(grads, 0.5)
                 self.optimizer.apply_gradients(zip(grads, self.player1.model.trainable_variables))
 
                 policy_losses.append(float(policy_loss))
@@ -147,6 +178,12 @@ class PPOTrainer:
         self.player2.setPPOTraining(True)
         self.player1.compile_for_rl()
         self.player2.compile_for_rl()
+
+        # Initialisation des teachers gelés avec les poids actuels de player1
+        if self.frozen_teachers:
+            for teacher in self.frozen_teachers:
+                teacher.model.set_weights(self.player1.model.get_weights())
+            print(f"  → {len(self.frozen_teachers)} teacher(s) initialisé(s)")
 
         history = {
             'policy_loss': [],
@@ -177,6 +214,12 @@ class PPOTrainer:
                   f"v_loss={metrics['value_loss']:.4f} | "
                   f"entropy={metrics['entropy']:.4f}")
 
+            # Mise à jour périodique des teachers gelés
+            if self.frozen_teachers and self.teacher_update_every > 0 and (i + 1) % self.teacher_update_every == 0:
+                for teacher in self.frozen_teachers:
+                    teacher.model.set_weights(self.player1.model.get_weights())
+                print(f"  → Teacher(s) mis à jour (iter {i+1})")
+
             if save_path and (i + 1) % save_every == 0:
                 self.player1.save_weights(f"{save_path}_iter{i+1}.weights.h5")
                 print(f"  → Sauvegardé : {save_path}_iter{i+1}.weights.h5")
@@ -201,7 +244,7 @@ if __name__ == "__main__":
         learning_rate=3e-4,
         clip_epsilon=0.2,
         value_coef=0.5,
-        entropy_coef=0.01,
+        entropy_coef=0.03,
         gamma=0.99,
         lam=0.95
     )

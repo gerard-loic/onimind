@@ -3,10 +3,12 @@ from typing import TYPE_CHECKING
 
 from board import Board
 from card import Card
-from players import Player, RandomPlayer, HumanPlayer, HeuristicPlayer, LookAheadHeuristicPlayer, MCTSPlayer, MCTSHeuristicPlayer, MCTSEvalPlayer
+from players import Player, RandomPlayer, HumanPlayer, HeuristicPlayer, LookAheadHeuristicPlayer, MCTSPlayer
 from dl_players_v2 import CNNPlayer_v2
 from dl_players_v1 import CNNPlayer_v1
 from dl_players_v3 import CNNPlayer_v3
+from dl_players_v4 import CNNPlayer_v4
+from dl_minimax import LookAheadDlPlayer
 import random
 from constants import *
 from tqdm import tqdm
@@ -105,16 +107,20 @@ class Game:
             #On fait jouer le joueur
             ts_before = int(time.time() * 1000)
             result = self.current_player.play(board=self.board)
-            #Dans le cas d'un entraînement PPO, retourne 3 valeurs
+            #Dans le cas d'un entraînement PPO, retourne 3 ou 4 valeurs
             if type(result) is tuple:
-                action, log_prob, value = result
+                if len(result) == 4:
+                    action, log_prob, value, valid_mask = result
+                else:
+                    action, log_prob, value = result
+                    valid_mask = None
             else:
-                action, log_prob, value = result, None, None
+                action, log_prob, value, valid_mask = result, None, None, None
             ts_after = int(time.time() * 1000)
 
             #On retourne l'information au trainer (si défini)
             if self.trainer is not None and action is not None:
-                self.trainer.save_experience(player=self.current_player, state=state, action=action, log_prob=log_prob, value=value)
+                self.trainer.save_experience(player=self.current_player, state=state, action=action, log_prob=log_prob, value=value, valid_mask=valid_mask)
 
             #On réalise l'action (uniquement si action possible)
             if action is not None:
@@ -261,9 +267,18 @@ if __name__ == "__main__":
     #game = Game(verbose=True, player_one=p1, player_two=p2)
     #game.playGame()
 
-    p1 = RandomPlayer()
-    p2 = MCTSPlayer()
+    p1r = LookAheadHeuristicPlayer(heuristic_function="heuristic_defensive", max_depth=1)
 
-    gameSession = GameSession(player_one=p1, player_two=p2, number_of_games=100)
+    #p1 = CNNPlayer_v2()
+    #p1.load_weights("../saved-models/CNNPlayer-v1-withdropout-datalarge-dropout-weights.weights.h5")
+
+    #cp = CNNPlayer_v4()
+    #cp.load_weights("../saved-models/PPO-Model1.weights.h5")
+
+    #p2 = LookAheadDlPlayer(max_depth=2, dl_player=cp, n_best_moves=5)
+
+    p2 = MCTSPlayer(num_simulations=2000)
+
+    gameSession = GameSession(player_one=p1r, player_two=p2, number_of_games=10)
     gameSession.start()
     print(gameSession.getStats())

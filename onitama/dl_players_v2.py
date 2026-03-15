@@ -111,16 +111,20 @@ class CNNPlayer_v2(Player):
             #Pour éviter qu'on choisisse malgré tout une action avec une probabilité quasi nulle
             if best_flat_idx not in action_to_move:
                 best_flat_idx = np.argmax(probs)  # fallback greedy
-            #log de la probabilité de l'action choisie (pour PPO)
-            log_prob = np.log(probs[best_flat_idx] + 1e-8)
+            #log de la probabilité de l'action choisie sur la distribution MASQUÉE
+            x_safe = np.where(masked_logits == -np.inf, -1e9, masked_logits)
+            max_x = np.max(x_safe)
+            log_prob = x_safe[best_flat_idx] - max_x - np.log(np.sum(np.exp(x_safe - max_x)))
+            #Masque à stocker dans le buffer : 0 pour actions valides, -1e9 pour invalides
+            valid_mask = np.where(masked_logits == -np.inf, -1e9, 0.0).astype(np.float32)
         else:
             #Sélectionner l'action avec la plus haute probabilité
             best_flat_idx = np.argmax(probs)
-        
+
         best_action = action_to_move[best_flat_idx]
 
         if self.with_ppo:
-            return best_action, log_prob, float(value.numpy()[0][0])
+            return best_action, log_prob, float(value.numpy()[0][0]), valid_mask
         else:
             return best_action
 
