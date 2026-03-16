@@ -216,7 +216,7 @@ class RegularDataTrainer(DataTrainer):
     # y_file_destination:str : Emplacement du fichier de destination des labels
     # v_file_destination:str : Emplacement du fichier de destination des outcomes (±1) pour la value head (optionnel)
     # override:bool : Si le fichier existe déjà on l'écrase
-    def __init__(self, p1:Player, p2:Player, p1_record:bool, p2_record:bool, save_only_wins:bool, x_file_destination:str, y_file_destination:str, v_file_destination:str=None, override:bool=False):
+    def __init__(self, p1:Player, p2:Player, p1_record:bool, p2_record:bool, save_only_wins:bool, x_file_destination:str, y_file_destination:str, v_file_destination:str=None, m_file_destination:str=None, override:bool=False):
         super().__init__()
         self.p1 = p1
         self.p2 = p2
@@ -226,13 +226,14 @@ class RegularDataTrainer(DataTrainer):
         self.x_file_destination = x_file_destination
         self.y_file_destination = y_file_destination
         self.v_file_destination = v_file_destination
+        self.m_file_destination = m_file_destination
 
         #Initialisation du cache
         self._init_cache()
 
         #Si suppression
         if override:
-            for filepath in [self.x_file_destination, self.y_file_destination, self.v_file_destination]:
+            for filepath in [self.x_file_destination, self.y_file_destination, self.v_file_destination, self.m_file_destination]:
                 if filepath is None:
                     continue
                 f = Path(filepath)
@@ -244,8 +245,10 @@ class RegularDataTrainer(DataTrainer):
     def _init_cache(self):
         self.cache_states_p1 = []
         self.cache_actions_p1 = []
+        self.cache_masks_p1 = []
         self.cache_states_p2 = []
         self.cache_actions_p2 = []
+        self.cache_masks_p2 = []
         self.cache_n_steps_p1 = 0  # nombre de pas de la partie en cours pour p1
         self.cache_n_steps_p2 = 0  # nombre de pas de la partie en cours pour p2
 
@@ -264,10 +267,12 @@ class RegularDataTrainer(DataTrainer):
         if (player == self.p1 and self.p1_record):
             self.cache_states_p1.append(state)
             self.cache_actions_p1.append(action)
+            self.cache_masks_p1.append(valid_mask)
             self.cache_n_steps_p1 += 1
         elif (player == self.p2 and self.p2_record):
             self.cache_states_p2.append(state)
             self.cache_actions_p2.append(action)
+            self.cache_masks_p2.append(valid_mask)
             self.cache_n_steps_p2 += 1
 
     # Enregistre les expériences en cache dans le fichier (quand une partie est terminée)
@@ -277,6 +282,7 @@ class RegularDataTrainer(DataTrainer):
         x_to_write = []
         y_to_write = []
         v_to_write = []
+        m_to_write = []
 
         # Outcomes du point de vue de chaque joueur
         # get_state() est perspective-aware : +1 si le joueur courant à cet état a finalement gagné
@@ -289,10 +295,12 @@ class RegularDataTrainer(DataTrainer):
                 x_to_write += self.cache_states_p1
                 y_to_write += self.cache_actions_p1
                 v_to_write += [outcome_p1] * self.cache_n_steps_p1
+                m_to_write += self.cache_masks_p1
             elif winner == self.p2:
                 x_to_write += self.cache_states_p2
                 y_to_write += self.cache_actions_p2
                 v_to_write += [outcome_p2] * self.cache_n_steps_p2
+                m_to_write += self.cache_masks_p2
         else:
             x_to_write += self.cache_states_p1
             x_to_write += self.cache_states_p2
@@ -300,6 +308,8 @@ class RegularDataTrainer(DataTrainer):
             y_to_write += self.cache_actions_p2
             v_to_write += [outcome_p1] * self.cache_n_steps_p1
             v_to_write += [outcome_p2] * self.cache_n_steps_p2
+            m_to_write += self.cache_masks_p1
+            m_to_write += self.cache_masks_p2
 
         # Enregistrement à la suite du fichier
         with open(self.x_file_destination, 'ab') as f:
@@ -309,6 +319,9 @@ class RegularDataTrainer(DataTrainer):
         if self.v_file_destination is not None:
             with open(self.v_file_destination, 'ab') as f:
                 pickle.dump(v_to_write, f)
+        if self.m_file_destination is not None:
+            with open(self.m_file_destination, 'ab') as f:
+                pickle.dump(m_to_write, f)
 
         # On réinitialise le cache
         self._init_cache()

@@ -8,8 +8,10 @@ from dl_players_v2 import CNNPlayer_v2
 from dl_players_v1 import CNNPlayer_v1
 from dl_players_v3 import CNNPlayer_v3
 from dl_players_v4 import CNNPlayer_v4
+from dl_players_v5 import CNNPlayer_v5
 from dl_minimax import LookAheadDlPlayer
 import random
+import numpy as np
 from constants import *
 from tqdm import tqdm
 import numpy as np
@@ -117,6 +119,15 @@ class Game:
             else:
                 action, log_prob, value, valid_mask = result, None, None, None
             ts_after = int(time.time() * 1000)
+
+            # Calculer le masque des actions valides si non fourni par le joueur
+            if self.trainer is not None and valid_mask is None and action is not None:
+                available_moves = self.board.get_available_moves()
+                valid_mask = np.full(1300, -1e9, dtype=np.float32)
+                for move in available_moves:
+                    col, row = move.from_pos
+                    flat_idx = col * 260 + row * 52 + move.move_idx
+                    valid_mask[flat_idx] = 0.0
 
             #On retourne l'information au trainer (si défini)
             if self.trainer is not None and action is not None:
@@ -267,18 +278,22 @@ if __name__ == "__main__":
     #game = Game(verbose=True, player_one=p1, player_two=p2)
     #game.playGame()
 
-    p1r = LookAheadHeuristicPlayer(heuristic_function="heuristic_defensive", max_depth=1)
+    pr = LookAheadHeuristicPlayer(heuristic_function="heuristic_defensive", max_depth=2)
+    #pr = HeuristicPlayer(heuristic_function="heuristic_defensive")
 
     #p1 = CNNPlayer_v2()
     #p1.load_weights("../saved-models/CNNPlayer-v1-withdropout-datalarge-dropout-weights.weights.h5")
 
-    #cp = CNNPlayer_v4()
-    #cp.load_weights("../saved-models/PPO-Model1.weights.h5")
+    #pt = CNNPlayer_v4()
+    #pt.load_weights("../saved-models/Musashi3.weights.h5")
+
+    pt5 = CNNPlayer_v5()
+    pt5.load_weights('../saved-models/CNNPlayer-v5-best.weights.h5')
 
     #p2 = LookAheadDlPlayer(max_depth=2, dl_player=cp, n_best_moves=5)
 
-    p2 = MCTSPlayer(num_simulations=2000)
+    #p2 = MCTSPlayer(num_simulations=2000)
 
-    gameSession = GameSession(player_one=p1r, player_two=p2, number_of_games=10)
+    gameSession = GameSession(player_one=pt5, player_two=pr, number_of_games=100)
     gameSession.start()
     print(gameSession.getStats())

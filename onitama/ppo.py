@@ -20,10 +20,11 @@ class PPOTrainer:
             entropy_coef:float = 0.03, #Poids du bonus d'entropie (exploration)
             gamma: float = 0.99,
             lam:float = 0.85,
-            alternative_players:list = [],  #Joueurs alternatifs utilisés dans le self play
+            alternative_players:list = [],   #Joueurs alternatifs utilisés dans le self play
             alternative_players_ratio:list = [], #Ratio d'utilisation des joueurs alternatifs
-            frozen_teachers:list = [],       #CNNPlayer_v2 à maintenir gelés (copie de player1 toutes les N itérations)
-            teacher_update_every:int = 0     #0 = désactivé, N = mise à jour toutes les N itérations
+            past_self:Player = None,          #Ancienne version de player1 (version gelée, mise à jour toutes les N itérations)
+            past_self_ratio:int = 0,          #% de parties jouées contre past_self (0 = désactivé)
+            past_self_update_every:int = 10   #Mise à jour de past_self toutes les N itérations
     ):
         self.player1 = player1
         self.player2 = player2
@@ -37,8 +38,9 @@ class PPOTrainer:
         self.lam = lam
         self.alternative_players = alternative_players
         self.alternative_players_ratio = alternative_players_ratio
-        self.frozen_teachers = frozen_teachers
-        self.teacher_update_every = teacher_update_every
+        self.past_self = past_self
+        self.past_self_ratio = past_self_ratio
+        self.past_self_update_every = past_self_update_every
 
         #Initialisation de l'optimizeur
         self.optimizer = tf.keras.optimizers.Adam(learning_rate)
@@ -50,24 +52,31 @@ class PPOTrainer:
 
     #Collecte: joue n_games parties et remplit le buffer
     def _collect(self)->dict:
-        #Deux instances distinctes qui partagent le même modèle
         p1 = self.player1
         p2 = self.player2
-        p2.model = p1.model #Même poids
+        p2.model = p1.model  #Self-play live : p2 partage les poids courants de p1
 
         buffer = PPOBuffer(p1=p1, p2=p2, gamma=self.gamma, lam=self.lam)
         self.wins = self.losses = self.draws = 0
 
+        # Construction de la liste d'adversaires et des seuils
+        # Ordre : past_self en premier, puis alternative_players, puis self-play live (p2)
         seuils = []
         players = []
         cumul = 0
+
+        if self.past_self is not None and self.past_self_ratio > 0:
+            cumul += self.past_self_ratio * self.n_games // 100
+            seuils.append(cumul)
+            players.append(self.past_self)
+
         for r in self.alternative_players_ratio:
             cumul += r * self.n_games // 100
             seuils.append(cumul)
-        seuils.append(self.n_games)
-
         for p in self.alternative_players:
             players.append(p)
+
+        seuils.append(self.n_games)
         players.append(p2)
 
         for i in tqdm(range(self.n_games), desc="self-play"):
@@ -179,11 +188,11 @@ class PPOTrainer:
         self.player1.compile_for_rl()
         self.player2.compile_for_rl()
 
-        # Initialisation des teachers gelés avec les poids actuels de player1
-        if self.frozen_teachers:
-            for teacher in self.frozen_teachers:
-                teacher.model.set_weights(self.player1.model.get_weights())
-            print(f"  → {len(self.frozen_teachers)} teacher(s) initialisé(s)")
+        # Initialisation de past_self avec les poids courants de player1
+        if self.past_self is not None and self.past_self_ratio > 0:
+            self.past_self.setPPOTraining(True)
+            self.past_self.model.set_weights(self.player1.model.get_weights())
+            print(f"  → past_self initialisé (mis à jour toutes les {self.past_self_update_every} itérations)")
 
         history = {
             'policy_loss': [],
@@ -214,11 +223,10 @@ class PPOTrainer:
                   f"v_loss={metrics['value_loss']:.4f} | "
                   f"entropy={metrics['entropy']:.4f}")
 
-            # Mise à jour périodique des teachers gelés
-            if self.frozen_teachers and self.teacher_update_every > 0 and (i + 1) % self.teacher_update_every == 0:
-                for teacher in self.frozen_teachers:
-                    teacher.model.set_weights(self.player1.model.get_weights())
-                print(f"  → Teacher(s) mis à jour (iter {i+1})")
+            # Mise à jour périodique de past_self
+            if self.past_self is not None and self.past_self_ratio > 0 and (i + 1) % self.past_self_update_every == 0:
+                self.past_self.model.set_weights(self.player1.model.get_weights())
+                print(f"  → past_self mis à jour (iter {i+1})")
 
             if save_path and (i + 1) % save_every == 0:
                 self.player1.save_weights(f"{save_path}_iter{i+1}.weights.h5")
