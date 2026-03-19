@@ -19,12 +19,25 @@ def top_k_accuracy(k):
     return metric
 
 def masked_categorical_crossentropy(label_smoothing=0.1):
-    """Loss cross-entropy masquée : y_true = concat([one_hot (1300), valid_mask (1300)])"""
+    """Loss cross-entropy masquée : y_true = concat([one_hot (1300), valid_mask (1300)])
+
+    Le label_smoothing est appliqué uniquement sur les classes valides pour éviter
+    que les -1e9 des actions invalides ne dominent la loss (bug : 7.69e-5 × 1e9 ≈ 76 923 par classe).
+    """
     def loss(y_true, y_pred):
         one_hot = y_true[:, :1300]
         mask = y_true[:, 1300:]   # 0 pour coups valides, -1e9 pour invalides
         masked_logits = y_pred + mask
-        return tf.keras.losses.categorical_crossentropy(one_hot, masked_logits, from_logits=True, label_smoothing=label_smoothing)
+
+        # Identifier les actions valides pour y appliquer le label smoothing
+        valid = tf.cast(mask > -1e8, tf.float32)                          # (batch, 1300) : 1=valide, 0=invalide
+        n_valid = tf.reduce_sum(valid, axis=-1, keepdims=True)            # (batch, 1) : nb de coups valides
+        smooth_per_class = label_smoothing / tf.maximum(n_valid, 1.0)    # évite la division par 0
+        smoothed = (1.0 - label_smoothing) * one_hot + smooth_per_class * valid
+
+        log_probs = tf.nn.log_softmax(masked_logits, axis=-1)
+        return tf.reduce_mean(-tf.reduce_sum(smoothed * log_probs, axis=-1))
+
     loss.__name__ = 'masked_categorical_crossentropy'
     return loss
 
@@ -360,7 +373,7 @@ class CNNPlayer_v6(Player):
         model = keras.Model(
             inputs=inputs,
             outputs=[policy_logits, value_output],
-            name='OnitamaNetwork-v5'
+            name='OnitamaNetwork-v6'
         )
         
         return model

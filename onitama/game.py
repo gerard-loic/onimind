@@ -9,6 +9,7 @@ from dl_players_v1 import CNNPlayer_v1
 from dl_players_v3 import CNNPlayer_v3
 from dl_players_v4 import CNNPlayer_v4
 from dl_players_v5 import CNNPlayer_v5
+from dl_players_v6 import CNNPlayer_v6
 from dl_minimax import LookAheadDlPlayer
 import random
 import numpy as np
@@ -278,7 +279,7 @@ if __name__ == "__main__":
     #game = Game(verbose=True, player_one=p1, player_two=p2)
     #game.playGame()
 
-    pr = LookAheadHeuristicPlayer(heuristic_function="heuristic_defensive", max_depth=2)
+    pr = LookAheadHeuristicPlayer(heuristic_function="heuristic_defensive", max_depth=3)
     #pr = HeuristicPlayer(heuristic_function="heuristic_defensive")
 
     #p1 = CNNPlayer_v2()
@@ -287,13 +288,17 @@ if __name__ == "__main__":
     #pt = CNNPlayer_v4()
     #pt.load_weights("../saved-models/Musashi3.weights.h5")
 
-    pt5 = CNNPlayer_v5()
-    pt5.load_weights('../saved-models/CNNPlayer-v5-best.weights.h5')
+    
+    pt = CNNPlayer_v5()
+    pt.load_weights("../saved-models/Tokugawa-1a.weights.h5")
+
+    #pt6 = CNNPlayer_v6()
+    #pt6.load_weights('../saved-models/CNNPlayer-v6-best.weights.h5')
 
     #p2 = LookAheadDlPlayer(max_depth=2, dl_player=cp, n_best_moves=5)
 
     #p2 = MCTSPlayer(num_simulations=2000)
 
-    gameSession = GameSession(player_one=pt5, player_two=pr, number_of_games=100)
+    gameSession = GameSession(player_one=pt, player_two=pr, number_of_games=100)
     gameSession.start()
     print(gameSession.getStats())
