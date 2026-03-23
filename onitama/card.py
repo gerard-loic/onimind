@@ -163,7 +163,7 @@ class Card:
         return self.print_value
 
 
-
+#Liste de toutes les cartes du jeu
 CARDS = [
     Card(idx=0, name="Tiger", relative_moves=[(0, -2, 0), (0, 1, 1)], color=COLOR_BLUE),
     Card(idx=1, name="Crab", relative_moves=[(-2, 0, 2), (0, -1, 3), (2, 0, 4)], color=COLOR_BLUE),

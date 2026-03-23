@@ -252,8 +252,62 @@ class CNNPlayer_v6(Player):
         self.model.save(filepath)
     
     #Charge les poids
-    def load_weights(self, filepath):
-        self.model.load_weights(filepath)
+    # skip_layers : liste de noms de couches à ignorer (garder leur init aléatoire)
+    # Utile pour charger des poids d'une architecture antérieure sans certaines couches (ex: value_adapter).
+    # Le fichier .weights.h5 groupe les couches par type (conv2d_0..N, batch_normalization_0..N...).
+    # On mappe chaque couche du modèle vers la couche correspondante du fichier selon son type et sa position.
+    def load_weights(self, filepath, skip_layers=None):
+        if skip_layers is None:
+            self.model.load_weights(filepath)
+            return
+
+        import h5py
+        from tensorflow.keras import layers as klayers
+
+        # Correspondance entre classe Keras et préfixe dans le fichier HDF5
+        TYPE_MAP = {
+            klayers.Conv2D: 'conv2d',
+            klayers.BatchNormalization: 'batch_normalization',
+            klayers.Dense: 'dense',
+        }
+
+        with h5py.File(filepath, 'r') as f:
+            # Pour chaque type, liste les clés du fichier triées par indice numérique
+            def get_file_keys_by_type(prefix):
+                keys = [k for k in f['layers'].keys()
+                        if k == prefix or k.startswith(prefix + '_')]
+                return sorted(keys, key=lambda k: int(k[len(prefix)+1:]) if '_' in k[len(prefix):] else 0)
+
+            file_keys_by_type = {prefix: get_file_keys_by_type(prefix) for prefix in TYPE_MAP.values()}
+            # Compteur : combien de couches de chaque type ont déjà été assignées dans le fichier
+            file_counters = {prefix: 0 for prefix in TYPE_MAP.values()}
+
+            for layer in self.model.layers:
+                if not layer.get_weights():
+                    continue
+                layer_type = type(layer)
+                if layer_type not in TYPE_MAP:
+                    print(f"Type inconnu ignoré : '{layer.name}' ({layer_type.__name__})")
+                    continue
+                prefix = TYPE_MAP[layer_type]
+
+                if layer.name in skip_layers:
+                    continue  # couche nouvelle absente du fichier : ne pas avancer le compteur
+
+                idx = file_counters[prefix]
+                keys = file_keys_by_type[prefix]
+                if idx >= len(keys):
+                    print(f"Attention : plus de '{prefix}' dans le fichier pour '{layer.name}'")
+                    continue
+                key = keys[idx]
+                var_keys = sorted(f[f'layers/{key}/vars'].keys(), key=lambda x: int(x))
+                weights = [f[f'layers/{key}/vars/{v}'][()] for v in var_keys]
+                try:
+                    layer.set_weights(weights)
+                    file_counters[prefix] += 1
+                except ValueError:
+                    print(f"Forme incompatible pour '{layer.name}' (ignoré)")
+                    file_counters[prefix] += 1
     
     #Sauvegarde les poids (uniquement les poids)
     def save_weights(self, filepath):
@@ -352,12 +406,24 @@ class CNNPlayer_v6(Player):
         #sortie: policy_logits → shape (batch, 1300)
 
         #Tête de valeur (estime si l'état est favorable ou non)
+        # Adaptateur value : traitement spatial dédié à partir des features du tronc gelé.
+        # Ces couches sont entraînées from scratch (absentes des anciens fichiers de poids →
+        # ignorées par load_weights(by_name=True, skip_mismatch=True)).
+        value = layers.Conv2D(
+            filters=64,
+            kernel_size=3,
+            padding='same',
+            name='value_adapter_conv'
+        )(x)
+        value = layers.BatchNormalization(name='value_adapter_bn')(value)
+        value = layers.Activation('relu', name='value_adapter_relu')(value)
+
         value = layers.Conv2D(
             filters=16,      #Valeur plus simple, donc moins de filtres
             kernel_size=1,
             padding='same',
             name='value_conv'
-        )(x)
+        )(value)
         value = layers.BatchNormalization(name='value_bn')(value)
         value = layers.Activation('relu', name='value_relu')(value)
         #Applatit le tenseur 3D en vecteur 1D

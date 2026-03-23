@@ -327,12 +327,6 @@ class Board:
 
         return res_str
 
-    #Représentation (pour machine learning)
-    def __repr__(self):
-        board_repr = f"{self.current_player}"
-        for col in range(5):
-            board_repr += '|' + ''.join([str(plr_type) for plr_type in self.board[col]])
-        return board_repr
 
 
 

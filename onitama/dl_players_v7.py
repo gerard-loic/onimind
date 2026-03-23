@@ -76,7 +76,7 @@ class DensePlayer_v7(Player):
         self.name = "DensePlayer"
 
         #Paramètres du réseau
-        self.hidden_units = hidden_units if hidden_units is not None else [512, 256, 128]
+        self.hidden_units = hidden_units if hidden_units is not None else [512, 512, 256]
         self.n_moves = 52
         self.dropout_rate = dropout_rate            #Taux de dropout pour les têtes (policy, value)
         self.trunk_dropout_rate = trunk_dropout_rate  #Taux de dropout entre les couches du tronc
@@ -191,7 +191,7 @@ class DensePlayer_v7(Player):
     #Compiler pour entraînement supervisé (on entraîne uniquement la policy)
     # use_mask=True : y doit être concat([one_hot (1300), valid_mask (1300)]) → shape (N, 2600)
     # use_mask=False : y est le one_hot classique → shape (N, 1300)
-    def compile_for_supervised_policy(self, learning_rate=0.001, label_smoothing=0.1, weight_decay=1e-4, use_mask=False):
+    def compile_for_supervised_policy(self, learning_rate=0.001, label_smoothing=0.0, weight_decay=1e-4, use_mask=False):
         # Geler la tête de valeur
         self.freeze_value_head()
 
@@ -235,6 +235,21 @@ class DensePlayer_v7(Player):
     #Affiche un résumé du modèle
     def summary(self):
         return self.model.summary()
+
+    #Désactive tous les dropouts (utile pour le pré-entraînement supervisé)
+    def disable_dropout(self):
+        for layer in self.model.layers:
+            if isinstance(layer, layers.Dropout):
+                layer.rate = 0.0
+
+    #Restaure les taux de dropout originaux (avant passage en RL)
+    def enable_dropout(self):
+        for layer in self.model.layers:
+            if isinstance(layer, layers.Dropout):
+                if 'trunk' in layer.name:
+                    layer.rate = self.trunk_dropout_rate
+                else:
+                    layer.rate = self.dropout_rate
 
     #Gèle la tête de valeur
     def freeze_value_head(self):
@@ -282,8 +297,8 @@ class DensePlayer_v7(Player):
                 x = layers.Dropout(self.trunk_dropout_rate, name=f'trunk_dropout_{i}')(x)
 
         #Tête de politique (Policy)
-        policy = layers.Dense(256, activation='relu', name='policy_dense')(x)
-        policy = layers.Dropout(self.dropout_rate, name='policy_dropout')(policy)
+        # Pas de Dense intermédiaire : le tronc finit à 256, expansion directe vers 1300
+        policy = layers.Dropout(self.dropout_rate, name='policy_dropout')(x)
         policy_logits = layers.Dense(5 * 5 * self.n_moves, activation=None, name='policy_logits')(policy)
         #sortie: policy_logits → shape (batch, 1300)
 

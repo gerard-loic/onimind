@@ -4,7 +4,8 @@ import numpy as np
 
 # Joueur utilisant un réseau + un algorithme minimax sur N niveaux
 # max_depth:int : niveau max de profondeur de l'algo minimax
-
+# dl_player:Player : CNN player à utiliser
+# n_best_moves:int : la recherche minimax est effectuée sur les N meilleurs coups prédits par le réseau
 class LookAheadDlPlayer(Player):
     def __init__(self, max_depth:int, dl_player:Player, n_best_moves:int=5):
         super().__init__()
@@ -25,18 +26,21 @@ class LookAheadDlPlayer(Player):
         #On utilise le réseau pour obtenir potentiellement la meilleure action possible
         available_actions, value = self._inference(board=board)
 
+        #Cas particulier : quand aucune actrin n'est dispo
         if len(available_actions) == 0:
             return None
 
         for action in available_actions:
             #On joue le coup
             last_move = board.play_move(action=action)
+
             #On descend d'un niveaux
             score = self._minimax(board=board, depth=0, is_maximizing=False)
 
             #On annule le coup
             board.cancel_last_move(last_move=last_move)
 
+            #Si le score obtenu est meilleur, on le conserve ainsi que le meilleur coup
             if score > best_score:
                 best_score = score
                 best_move = action
