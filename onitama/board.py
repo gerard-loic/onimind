@@ -327,7 +327,8 @@ class Board:
 
         return res_str
 
-
+    def __repr__(self):
+        return np.array(self.get_state()).tobytes().hex()
 
 
     

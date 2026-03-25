@@ -11,6 +11,7 @@ from dl_players_v4 import CNNPlayer_v4
 from dl_players_v5 import CNNPlayer_v5
 from dl_players_v6 import CNNPlayer_v6
 from dl_players_v6b import CNNPlayer_v6b
+from dl_players_v7 import DensePlayer_v7
 from dl_minimax import LookAheadDlPlayer
 import random
 import numpy as np
@@ -296,12 +297,15 @@ if __name__ == "__main__":
     #pt6 = CNNPlayer_v6()
     #pt6.load_weights('../saved-models/Kamae1.weights.h5', skip_layers=['value_adapter_conv', 'value_adapter_bn', 'value_adapter_relu'])
 
-    pt6b = CNNPlayer_v6()
-    pt6b.load_weights('../saved-models/Kamae5.weights.h5')
-    p2 = LookAheadDlPlayer(max_depth=2, dl_player=pt6b, n_best_moves=5)
+    #pt6b = CNNPlayer_v6()
+    #pt6b.load_weights('../saved-models/Kamae5.weights.h5')
+    #p2 = LookAheadDlPlayer(max_depth=2, dl_player=pt6b, n_best_moves=5)
 
     #p2 = MCTSPlayer(num_simulations=2000)
 
-    gameSession = GameSession(player_one=p2, player_two=pr, number_of_games=100)
+    p2 = DensePlayer_v7()
+    p2.load_weights('../saved-models/ppo-tairanauchu3-e1_iter650.weights.h5')
+
+    gameSession = GameSession(player_one=p2, player_two=pr, number_of_games=1000)
     gameSession.start()
     print(gameSession.getStats())

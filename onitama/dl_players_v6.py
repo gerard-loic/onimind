@@ -7,8 +7,8 @@ from tensorflow.keras import metrics
 import numpy as np
 
 
+# Métrique top-k accuracy pour les policy
 def top_k_accuracy(k):
-    """Crée une métrique top-k accuracy pour les logits"""
     def metric(y_true, y_pred):
         return metrics.sparse_top_k_categorical_accuracy(
             tf.argmax(y_true, axis=-1),  # Convertir one-hot en index
@@ -18,12 +18,8 @@ def top_k_accuracy(k):
     metric.__name__ = f'top_{k}_accuracy'
     return metric
 
+#Loss cross-entropy masquée (label smoothing appliqué uniquement sur les classes valides pour éviter qie les actions invalident ne dominent la loss)
 def masked_categorical_crossentropy(label_smoothing=0.1):
-    """Loss cross-entropy masquée : y_true = concat([one_hot (1300), valid_mask (1300)])
-
-    Le label_smoothing est appliqué uniquement sur les classes valides pour éviter
-    que les -1e9 des actions invalides ne dominent la loss (bug : 7.69e-5 × 1e9 ≈ 76 923 par classe).
-    """
     def loss(y_true, y_pred):
         one_hot = y_true[:, :1300]
         mask = y_true[:, 1300:]   # 0 pour coups valides, -1e9 pour invalides
@@ -41,8 +37,8 @@ def masked_categorical_crossentropy(label_smoothing=0.1):
     loss.__name__ = 'masked_categorical_crossentropy'
     return loss
 
+#Accuracy sur les coups valides uniquements
 def masked_accuracy():
-    """Accuracy sur coups valides uniquement : y_true = concat([one_hot, valid_mask])"""
     def metric(y_true, y_pred):
         one_hot = y_true[:, :1300]
         mask = y_true[:, 1300:]
@@ -51,6 +47,7 @@ def masked_accuracy():
     metric.__name__ = 'policy_logits_accuracy'
     return metric
 
+#Top-k accuracy sur les coups valides uniquement
 def masked_top_k_accuracy(k):
     """Top-k accuracy sur coups valides uniquement : y_true = concat([one_hot, valid_mask])"""
     def metric(y_true, y_pred):
@@ -61,7 +58,10 @@ def masked_top_k_accuracy(k):
     metric.__name__ = f'top_{k}_accuracy'
     return metric
 
+
 # V6 du joueur utilisant un réseau de neurones
+#Modifications par rapport à v5 : 
+# - implémentation de la loss cross-entropy masquée (en option)
 class CNNPlayer_v6(Player):
     #Méthodes statiques
     #------------------------------------------------------------------------------------------------------------------------------------
@@ -80,8 +80,6 @@ class CNNPlayer_v6(Player):
         move_id = best_index % 52
         
         return int(col), int(ligne), int(move_id)
-
-
 
 
     #------------------------------------------------------------------------------------------------------------------------------------
@@ -107,6 +105,7 @@ class CNNPlayer_v6(Player):
         # Garder des références aux différentes parties du réseau
         self._identify_heads()
 
+    # Active l'entraînement avec PPO
     def setPPOTraining(self, with_ppo:bool):
         self.with_ppo = with_ppo
 
@@ -115,15 +114,17 @@ class CNNPlayer_v6(Player):
         state = np.array(board.get_state())
         #On le transpose (10, 5, 5) => (5, 5, 10)
         state = np.transpose(state, (1, 2, 0))
+        #Todo : éviter la transposition
 
         #On récupère les mouvements possibles
         available_moves = board.get_available_moves()
 
+        #Cas particulier ; aucun coup possible
         if len(available_moves) == 0:
             return None
 
         #On effectue la prédiction
-        policy_logits, value = self.predict(state, training=False)
+        policy_logits, value = self.predict(state)
         # value = float entre -1 (position perdue) et +1 (position gagnée)
         policy_logits = np.array(policy_logits).flatten()  # (1300,)
 
@@ -168,20 +169,18 @@ class CNNPlayer_v6(Player):
         else:
             return best_action
 
+    #Softmax stable numériquement (gère les -inf)
     def _softmax(self, x):
-        """Softmax stable numériquement (gère les -inf)"""
-        #Remplacer -inf par une très petite valeur pour éviter les NaN
         x_safe = np.where(x == -np.inf, -1e9, x)
         exp_x = np.exp(x_safe - np.max(x_safe))
         return exp_x / exp_x.sum()
 
     # Réalise une prédiction
     # state:dict(5,5,10) ou (batch,5,5,10)
-    # training:bool : ????
     # Retourne : 
     # policy_logits : (batch, 5, 5, 52) 
     # value : (batch, 1)
-    def predict(self, state:dict, training:bool=False):
+    def predict(self, state:dict):
         # Ajouter dimension batch si nécessaire
         if len(state.shape) == 3:
             state = tf.expand_dims(state, 0)
@@ -203,8 +202,7 @@ class CNNPlayer_v6(Player):
                 keras.losses.CategoricalCrossentropy(from_logits=True),  # Policy
                 keras.losses.MeanSquaredError()  # Value
             ],
-            #La politique a plus de poids (1.0 vs 0.5), donc le modèle se concentre davantage sur bien jouer que sur bien évaluer.
-            loss_weights=[1.0, 0.5],
+            loss_weights=[1.0, 0.5], #Politique a plus de poids (on se concentre sur bien jouer)
             metrics=[
                 ['accuracy'],  # Policy metrics -> % de coups correctement prédits
                 ['mae']  # Value metrics -> Erreur moyenne absolue sur le score
@@ -234,7 +232,7 @@ class CNNPlayer_v6(Player):
         print(f"Modèle compilé pour entraînement supervisé (policy seulement, label_smoothing={label_smoothing}, weight_decay={weight_decay}, use_mask={use_mask})")
     
     #Compiler pour entraînement RL (tout entraînable)
-    def compile_for_rl(self, learning_rate=3e-4):
+    def compile_for_rl(self):
 
         # Dégeler tout
         self.unfreeze_value_head()
@@ -256,6 +254,7 @@ class CNNPlayer_v6(Player):
     # Utile pour charger des poids d'une architecture antérieure sans certaines couches (ex: value_adapter).
     # Le fichier .weights.h5 groupe les couches par type (conv2d_0..N, batch_normalization_0..N...).
     # On mappe chaque couche du modèle vers la couche correspondante du fichier selon son type et sa position.
+    #@Todo : Supprimer le skip_layer
     def load_weights(self, filepath, skip_layers=None):
         if skip_layers is None:
             self.model.load_weights(filepath)
@@ -354,10 +353,6 @@ class CNNPlayer_v6(Player):
 
         #Tronc commun
         #Couche de convolution 2D
-        #L'entrée inputs est une grille (le plateau d'Onitama, 5×5)
-        #Chaque filtre 3×3 parcourt cette grille
-        #À chaque position, il calcule une somme pondérée des 9 valeurs voisines
-        #Cela produit une "feature map" qui capture des motifs locaux (positions de pièces adjacentes, menaces, etc.)
         x = layers.Conv2D(
             filters=self.n_filters,
             kernel_size=self.kernel_size,
@@ -366,12 +361,7 @@ class CNNPlayer_v6(Player):
         )(inputs)   #Applique la couche aux données
 
         #Normalise les valeurs pour qu'elles aient une moyenne proche de 0 et un écart-type proche de 1
-        #Pourquoi ?
-        #Stabilise l'entraînement en évitant que les valeurs explosent ou s'effondrent au fil des couches
-        #Accélère la convergence : le réseau apprend plus vite car les gradients sont mieux calibrés
-        #Réduit légèrement l'overfitting
         x = layers.BatchNormalization(name='bn_input')(x)
-        #Applique ReLU
         x = layers.Activation('relu', name='relu_input')(x)
 
         #Blocs résiduels
@@ -379,9 +369,7 @@ class CNNPlayer_v6(Player):
             x = self._residual_block(x, name=f'res_block_{i}', dropout_rate=self.residual_dropout_rate)
 
         #Tête de politique (Policy) => prévoit l'action à réaliser
-
         # Couche intermédiaire : combine les canaux du tronc (128 → 64)
-        # BatchNorm + Dropout pour régularisation (évite l'overfitting)
         policy = layers.Conv2D(
             filters=64,
             kernel_size=1,
@@ -406,9 +394,6 @@ class CNNPlayer_v6(Player):
         #sortie: policy_logits → shape (batch, 1300)
 
         #Tête de valeur (estime si l'état est favorable ou non)
-        # Adaptateur value : traitement spatial dédié à partir des features du tronc gelé.
-        # Ces couches sont entraînées from scratch (absentes des anciens fichiers de poids →
-        # ignorées par load_weights(by_name=True, skip_mismatch=True)).
         value = layers.Conv2D(
             filters=64,
             kernel_size=3,
@@ -419,23 +404,20 @@ class CNNPlayer_v6(Player):
         value = layers.Activation('relu', name='value_adapter_relu')(value)
 
         value = layers.Conv2D(
-            filters=16,      #Valeur plus simple, donc moins de filtres
+            filters=16,      
             kernel_size=1,
             padding='same',
             name='value_conv'
         )(value)
         value = layers.BatchNormalization(name='value_bn')(value)
         value = layers.Activation('relu', name='value_relu')(value)
-        #Applatit le tenseur 3D en vecteur 1D
         value = layers.Flatten(name='value_flatten')(value)
-        #Dropout pour régularisation (évite l'overfitting)
         value = layers.Dropout(self.dropout_rate, name='value_dropout')(value)
         #Couche Fully connectée, sert à combiner toutes les informations spatiales pour évaluer la position globale
         value = layers.Dense(128, activation='relu', name='value_dense1')(value)
-        #Sortie : 1 neurone, le score de la position, tanh me permet de borner la sortie entre -1 et 1
+        #Sortie : 1 neurone, le score de la position, tanh pour une sortie entre -1 et 1
         value_output = layers.Dense(1, activation='tanh', name='value_output')(value)
         
-        #Compiler le modèle
         model = keras.Model(
             inputs=inputs,
             outputs=[policy_logits, value_output],
@@ -446,14 +428,6 @@ class CNNPlayer_v6(Player):
         
 
     #Construction d'un bloc résiduel
-    #Le bloc résiduel vise à résoudre deux problèmes :
-    #Problème 1 : Vanishing Gradient
-    #Lors du backpropagation, le gradient se multiplie à chaque couche
-    #gradient × 0.9 × 0.9 × 0.9 × ... (20 fois) ≈ 0.12 (très petit !)
-    #Les premières couches n'apprennent presque plus
-    #Problème 2 : Dégradation
-    #Paradoxalement, ajouter plus de couches peut diminuer les performances
-    #Le réseau a du mal à apprendre même la fonction identité
     def _residual_block(self, x, name:str, dropout_rate:float=0.0):
         # Branche principale
         conv1 = layers.Conv2D(

@@ -104,7 +104,7 @@ class DensePlayer_v7(Player):
             return None
 
         #On effectue la prédiction
-        policy_logits, value = self.predict(state, training=False)
+        policy_logits, value = self.predict(state)
         # value = float entre -1 (position perdue) et +1 (position gagnée)
         policy_logits = np.array(policy_logits).flatten()  # (1300,)
 
@@ -160,7 +160,7 @@ class DensePlayer_v7(Player):
     # Retourne :
     # policy_logits : (batch, 1300)
     # value : (batch, 1)
-    def predict(self, state:dict, training:bool=False):
+    def predict(self, state:dict):
         # Ajouter dimension batch si nécessaire
         if len(state.shape) == 3:
             state = tf.expand_dims(state, 0)
@@ -225,8 +225,8 @@ class DensePlayer_v7(Player):
         self.model.save(filepath)
 
     #Charge les poids
-    def load_weights(self, filepath):
-        self.model.load_weights(filepath)
+    def load_weights(self, filepath, **kwargs):
+        self.model.load_weights(filepath, **kwargs)
 
     #Sauvegarde les poids
     def save_weights(self, filepath):
@@ -303,8 +303,9 @@ class DensePlayer_v7(Player):
         #sortie: policy_logits → shape (batch, 1300)
 
         #Tête de valeur
-        value = layers.Dense(64, activation='relu', name='value_dense1')(x)
+        value = layers.Dense(128, activation='relu', name='value_dense1')(x)
         value = layers.Dropout(self.dropout_rate, name='value_dropout')(value)
+        value = layers.Dense(64, activation='relu', name='value_dense2')(value)
         value_output = layers.Dense(1, activation='tanh', name='value_output')(value)
         #sortie: value_output → shape (batch, 1)
 

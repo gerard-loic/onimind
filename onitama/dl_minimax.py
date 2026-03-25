@@ -55,7 +55,7 @@ class LookAheadDlPlayer(Player):
         state = np.transpose(state, (1, 2, 0))
 
         #On effectue la prédiction
-        policy_logits, value = self.dl_player.predict(state, training=False)
+        policy_logits, value = self.dl_player.predict(state)
 
         # value = float entre -1 (position perdue) et +1 (position gagnée)
         policy_logits = np.array(policy_logits).flatten()  # (1300,)
@@ -95,7 +95,7 @@ class LookAheadDlPlayer(Player):
     def _get_value(self, board:Board) -> float:
         state = np.array(board.get_state())
         state = np.transpose(state, (1, 2, 0))
-        _, value = self.dl_player.predict(state, training=False)
+        _, value = self.dl_player.predict(state)
         return float(value.numpy()[0][0])
 
     def _minimax(self, board:Board, depth:int, is_maximizing:bool, consecutive_default_moves:int=0):
