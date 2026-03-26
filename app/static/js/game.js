@@ -312,6 +312,7 @@ class Onitama{
         if (this.readyState === this.DONE) {
             console.log(this.responseText);
             ref.current_state = JSON.parse(this.responseText);
+            ref.uid = ref.current_state.game_uid
             ref.humanIsPlayerOne = (ref.current_state.current_player == "HUMAN");
             if(ref.current_state.current_player == "IA"){
                 ref.updateBoard(true, true);
@@ -365,7 +366,7 @@ class Onitama{
         }
         });
 
-        xhr.open('POST', API_URL+'game/TEST/player/play');
+        xhr.open('POST', API_URL+'game/'+ref.uid+'/player/play');
         xhr.setRequestHeader('authorization', 'Basic '+API_KEY);
         xhr.setRequestHeader('content-type', 'application/json');
 
@@ -448,7 +449,7 @@ class Onitama{
         }
         });
 
-        xhr.open('POST', API_URL+'game/TEST/opponent/play');
+        xhr.open('POST', API_URL+'game/'+ref.uid+'/opponent/play');
         xhr.setRequestHeader('authorization', 'Basic '+API_KEY);
         xhr.setRequestHeader('content-type', 'application/json');
 
