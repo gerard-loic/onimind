@@ -14,7 +14,6 @@ class SessionMemory:
     @staticmethod
     def createSession(data:dict):
         uid = Uid.create()
-        uid = "TEST"
         SessionMemory.cache[str(uid)] = data
         return uid
     
