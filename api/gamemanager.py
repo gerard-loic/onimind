@@ -1,6 +1,7 @@
 from sessionmemory import SessionMemory
 import sys
-sys.path.append('../onitama/')
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '../onitama/'))
 from game import Game
 from card import Card
 from players import HeuristicPlayer, ApiPlayer, Player, RandomPlayer, LookAheadHeuristicPlayer

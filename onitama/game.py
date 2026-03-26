@@ -304,7 +304,7 @@ if __name__ == "__main__":
     #p2 = MCTSPlayer(num_simulations=2000)
 
     p2 = DensePlayer_v7()
-    p2.load_weights('../saved-models/ppo-tairanauchu3-e1_iter650.weights.h5')
+    p2.load_weights('../saved-models/ppo-tairanauchu3-e2_iter90.weights.h5')
 
     gameSession = GameSession(player_one=p2, player_two=pr, number_of_games=1000)
     gameSession.start()
