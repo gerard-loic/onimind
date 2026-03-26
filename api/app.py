@@ -82,6 +82,8 @@ def get_players(username: str = Depends(verify_credentials)):
             {
                 'uid' : player,
                 'name' : players[player]['name'],
+                'description' : players[player]['description'],
+                'stars' : players[player]['stars'],
                 'class' : players[player]['class'].name
             }
         )

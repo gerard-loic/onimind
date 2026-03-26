@@ -9,9 +9,9 @@ from constants import *
 from exceptions import InvalidPlayerException, GameEndedException, InvalidSessionException, PlayerNotFoundException
 
 players = {
-    'heuristic_regular' : { 'class' : HeuristicPlayer(heuristic_function='heuristic_regular'), 'name' : 'Joueur heuristique (regular)'},
-    'random' : { 'class' : RandomPlayer(), 'name' : 'Joueur random'},
-    'heuristic_3lookahead_regular' : { 'class' : LookAheadHeuristicPlayer(max_depth=3, heuristic_function='heuristic_regular'), 'name' : 'Joueur 3 LookAhead heuristique (regular)'},
+    'random' : { 'class' : RandomPlayer(), 'name' : 'Joueur aléatoire', 'description' : 'Joue des coups au hasard, sans aucune stratégie.', 'stars' : 1 },
+    'heuristic_regular' : { 'class' : HeuristicPlayer(heuristic_function='heuristic_regular'), 'name' : 'Joueur heuristique', 'description' : 'Évalue chaque coup grâce à une fonction heuristique simple.', 'stars' : 3 },
+    'heuristic_3lookahead_regular' : { 'class' : LookAheadHeuristicPlayer(max_depth=3, heuristic_function='heuristic_regular'), 'name' : 'Joueur anticipation', 'description' : 'Anticipe jusqu\'à 3 coups à l\'avance avec une heuristique avancée.', 'stars' : 5 },
 }
 
 class GameManager:

@@ -5,8 +5,6 @@ class Home{
     }
 
     getPlayers(){
-        const data = JSON.stringify({});
-
         const xhr = new XMLHttpRequest();
         xhr.withCredentials = true;
 
@@ -14,7 +12,7 @@ class Home{
         xhr.addEventListener('readystatechange', function () {
             if (this.readyState === this.DONE) {
                 self.players = JSON.parse(this.responseText);
-                self.renderPlayers(players);
+                self.renderPlayers();
             }
         });
 
@@ -22,18 +20,11 @@ class Home{
         xhr.setRequestHeader('authorization', 'Basic '+API_KEY);
         xhr.setRequestHeader('content-type', 'application/json');
 
-        xhr.send(data);
+        xhr.send();
     }
 
-    getDifficultyColor(difficulty){
-        // 0 = vert clair, 100 = vert foncé
-        const lightness = 75 - (difficulty / 100) * 45;
-        return `hsl(120, 70%, ${lightness}%)`;
-    }
-
-    renderPlayers(players){
+    renderPlayers(){
         this.playersContainer.innerHTML = '';
-        console.log(this.players);
         this.players["players"].forEach(player => {
             const el = document.createElement('div');
             el.className = 'player';
@@ -41,25 +32,28 @@ class Home{
             const name = document.createElement('div');
             name.className = 'name';
             name.textContent = player.name;
-            player.difficulty = 100;
-            const diff = player.difficulty ?? 0;
-            const color = this.getDifficultyColor(diff);
-            const angle = (diff / 100) * 360;
 
-            const pie = document.createElement('div');
-            pie.className = 'difficulte';
-            pie.style.background = `conic-gradient(${color} ${angle}deg, rgba(255,255,255,0.08) ${angle}deg)`;
+            const description = document.createElement('div');
+            description.className = 'description';
+            description.textContent = player.description ?? '';
 
-            const label = document.createElement('div');
-            label.className = 'difficulte-label';
-            label.textContent = diff;
+            const stars = document.createElement('div');
+            stars.className = 'stars';
+            const total = 5;
+            const filled = player.stars ?? 0;
+            for (let i = 1; i <= total; i++) {
+                const star = document.createElement('span');
+                star.className = 'star' + (i <= filled ? ' filled' : '');
+                star.textContent = '★';
+                stars.appendChild(star);
+            }
 
-            pie.appendChild(label);
             el.appendChild(name);
-            el.appendChild(pie);
+            el.appendChild(description);
+            el.appendChild(stars);
 
             el.addEventListener('click', () => {
-                window.location.href = `/game?player=${encodeURIComponent(player.name)}`;
+                window.location.href = `/game?player=${encodeURIComponent(player.uid)}`;
             });
 
             this.playersContainer.appendChild(el);
@@ -68,5 +62,5 @@ class Home{
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    home = new Home();
+    new Home();
 });
