@@ -300,8 +300,11 @@ class Onitama{
     createGame(){
         this.log("Creating the game...");
 
+        const params = new URLSearchParams(window.location.search);
+        const playerUid = params.get('player') || 'heuristic_3lookahead_regular';
+
         const data = JSON.stringify({
-        player: 'heuristic_3lookahead_regular'
+        player: playerUid
         });
 
         const xhr = new XMLHttpRequest();

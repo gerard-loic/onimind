@@ -328,7 +328,18 @@ class Board:
         return res_str
 
     def __repr__(self):
-        return np.array(self.get_state()).tobytes().hex()
+        # Hash léger : grille (25 octets) + cartes + joueurs — sans numpy
+        board_bytes = bytes(cell for col in self.board for cell in col)
+        meta = bytes([
+            self.current_player,
+            self.first_player,
+            self.current_player_cards[0].idx,
+            self.current_player_cards[1].idx,
+            self.next_player_cards[0].idx,
+            self.next_player_cards[1].idx,
+            self.neutral_card.idx,
+        ])
+        return (board_bytes + meta).hex()
 
 
     

@@ -6,7 +6,7 @@
 </defs>
 
 <!-- INPUT -->
-<g onclick="sendPrompt('Que représentent les 10 canaux du tenseur d\'entrée 5×5×10 dans le réseau Onitama v7 ?')" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+<g onclick="sendPrompt('Que représentent les 10 canaux du tenseur d\'entrée 5×5×10 dans le réseau Onitama v9 ?')" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
   <rect x="240" y="30" width="200" height="56" rx="8" stroke-width="0.5" style="fill:rgb(68, 68, 65);stroke:rgb(180, 178, 169);stroke-width:0.5px"/>
   <text x="340" y="48" text-anchor="middle" dominant-baseline="central" style="fill:rgb(211, 209, 199);font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">Entrée</text>
   <text x="340" y="68" text-anchor="middle" dominant-baseline="central" style="fill:rgb(180, 178, 169);font-size:12px;text-anchor:middle;dominant-baseline:central">batch × 5 × 5 × 10</text>
@@ -15,20 +15,20 @@
 <line x1="340" y1="86" x2="340" y2="104" marker-end="url(#arrow)" style="fill:none;stroke:rgb(156, 154, 146);stroke-width:1.5px"/>
 
 <!-- FLATTEN -->
-<g onclick="sendPrompt('Pourquoi la v7 aplatit le plateau en vecteur (250,) au lieu d\'utiliser des convolutions comme les versions précédentes ?')" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+<g onclick="sendPrompt('Pourquoi la v9 aplatit le plateau en vecteur (250,) au lieu d\'utiliser des convolutions ?')" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
   <rect x="265" y="104" width="150" height="36" rx="8" stroke-width="0.5" style="fill:rgb(68, 68, 65);stroke:rgb(180, 178, 169);stroke-width:0.5px"/>
   <text x="340" y="122" text-anchor="middle" dominant-baseline="central" style="fill:rgb(211, 209, 199);font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">Flatten → (250)</text>
 </g>
 
 <line x1="340" y1="140" x2="340" y2="158" marker-end="url(#arrow)" style="fill:none;stroke:rgb(156, 154, 146);stroke-width:1.5px"/>
 
-<!-- TRUNK: 3 dense layers (512, 512, 256) -->
-<g onclick="sendPrompt('Pourquoi le tronc de la v7 utilise trois couches Dense(512 → 512 → 256) avec BatchNorm et Dropout(0.1) ?')" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+<!-- TRUNK: 3 dense layers (512, 512, 256) with LayerNorm -->
+<g onclick="sendPrompt('Pourquoi le tronc de la v9 utilise LayerNorm à la place de BatchNorm avec Dropout(0.1) ?')" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
   <rect x="190" y="158" width="300" height="96" rx="8" stroke-width="0.5" style="fill:rgb(60, 52, 137);stroke:rgb(175, 169, 236);stroke-width:0.5px"/>
   <text x="340" y="179" text-anchor="middle" dominant-baseline="central" style="fill:rgb(206, 203, 246);font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">Tronc Dense</text>
-  <text x="340" y="199" text-anchor="middle" dominant-baseline="central" style="fill:rgb(175, 169, 236);font-size:12px;text-anchor:middle;dominant-baseline:central">Dense(512) · BN · ReLU · Drop(0.1)</text>
-  <text x="340" y="218" text-anchor="middle" dominant-baseline="central" style="fill:rgb(175, 169, 236);font-size:12px;text-anchor:middle;dominant-baseline:central">Dense(512) · BN · ReLU · Drop(0.1)</text>
-  <text x="340" y="237" text-anchor="middle" dominant-baseline="central" style="fill:rgb(175, 169, 236);font-size:12px;text-anchor:middle;dominant-baseline:central">Dense(256) · BN · ReLU · Drop(0.1)</text>
+  <text x="340" y="199" text-anchor="middle" dominant-baseline="central" style="fill:rgb(175, 169, 236);font-size:12px;text-anchor:middle;dominant-baseline:central">Dense(512) · LN · ReLU · Drop(0.1)</text>
+  <text x="340" y="218" text-anchor="middle" dominant-baseline="central" style="fill:rgb(175, 169, 236);font-size:12px;text-anchor:middle;dominant-baseline:central">Dense(512) · LN · ReLU · Drop(0.1)</text>
+  <text x="340" y="237" text-anchor="middle" dominant-baseline="central" style="fill:rgb(175, 169, 236);font-size:12px;text-anchor:middle;dominant-baseline:central">Dense(256) · LN · ReLU · Drop(0.1)</text>
 </g>
 
 <!-- Fork -->
@@ -39,15 +39,15 @@
 <circle cx="340" cy="272" r="3.5" fill="rgb(194, 192, 182)" style="stroke:none"/>
 
 <!-- ═══ POLICY HEAD (gauche) ═══ -->
-<g onclick="sendPrompt('Pourquoi la tête politique de la v7 applique uniquement un Dropout(0.4) avant Dense(1300) sans couche intermédiaire ?')" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+<g onclick="sendPrompt('Pourquoi la tête politique de la v9 ajoute une couche Dense(512, relu) intermédiaire avant Dense(1300) par rapport à la v7 ?')" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
   <rect x="40" y="290" width="260" height="56" rx="8" stroke-width="0.5" style="fill:rgb(8, 80, 65);stroke:rgb(93, 202, 165);stroke-width:0.5px"/>
   <text x="170" y="308" text-anchor="middle" dominant-baseline="central" style="fill:rgb(159, 225, 203);font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">Tête politique</text>
-  <text x="170" y="328" text-anchor="middle" dominant-baseline="central" style="fill:rgb(93, 202, 165);font-size:12px;text-anchor:middle;dominant-baseline:central">Drop(0.4)</text>
+  <text x="170" y="328" text-anchor="middle" dominant-baseline="central" style="fill:rgb(93, 202, 165);font-size:12px;text-anchor:middle;dominant-baseline:central">Dense(512, relu) · Drop(0.4)</text>
 </g>
 
 <line x1="170" y1="346" x2="170" y2="364" marker-end="url(#arrow)" style="fill:none;stroke:rgb(156, 154, 146);stroke-width:1.5px"/>
 
-<g onclick="sendPrompt('Comment les 1300 sorties Dense remplacent-elles les Conv2D(52) dans la v7 pour produire les logits de politique ?')" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+<g onclick="sendPrompt('Comment les 1300 sorties Dense produisent-elles les logits de politique dans la v9 ?')" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
   <rect x="40" y="364" width="260" height="44" rx="8" stroke-width="0.5" style="fill:rgb(8, 80, 65);stroke:rgb(93, 202, 165);stroke-width:0.5px"/>
   <text x="170" y="382" text-anchor="middle" dominant-baseline="central" style="fill:rgb(159, 225, 203);font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">Logits π(a|s)</text>
   <text x="170" y="400" text-anchor="middle" dominant-baseline="central" style="fill:rgb(93, 202, 165);font-size:12px;text-anchor:middle;dominant-baseline:central">Dense(1 300, linéaire)</text>
@@ -61,7 +61,7 @@
 </g>
 
 <!-- ═══ VALUE HEAD (droite) ═══ -->
-<g onclick="sendPrompt('Comment la tête de valeur de la v7 passe de 256 neurones à V(s) via Dense(128) → Drop(0.4) → Dense(64) → tanh ?')" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+<g onclick="sendPrompt('Comment la tête de valeur de la v9 passe de 256 neurones à V(s) via Dense(128) → Drop(0.4) → Dense(64) → tanh ?')" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
   <rect x="380" y="290" width="260" height="56" rx="8" stroke-width="0.5" style="fill:rgb(113, 43, 19);stroke:rgb(240, 153, 123);stroke-width:0.5px"/>
   <text x="510" y="308" text-anchor="middle" dominant-baseline="central" style="fill:rgb(245, 196, 179);font-size:14px;font-weight:500;text-anchor:middle;dominant-baseline:central">Tête de valeur</text>
   <text x="510" y="328" text-anchor="middle" dominant-baseline="central" style="fill:rgb(240, 153, 123);font-size:12px;text-anchor:middle;dominant-baseline:central">Dense(128, relu) · Drop(0.4)</text>
@@ -69,7 +69,7 @@
 
 <line x1="510" y1="346" x2="510" y2="364" marker-end="url(#arrow)" style="fill:none;stroke:rgb(156, 154, 146);stroke-width:1.5px"/>
 
-<g onclick="sendPrompt('Quel est le rôle de la couche Dense(64, relu) dans la tête de valeur de la v7 avant la sortie tanh ?')" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+<g onclick="sendPrompt('Quel est le rôle de la couche Dense(64, relu) dans la tête de valeur de la v9 avant la sortie tanh ?')" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
   <rect x="430" y="364" width="160" height="36" rx="8" stroke-width="0.5" style="fill:rgb(113, 43, 19);stroke:rgb(240, 153, 123);stroke-width:0.5px"/>
   <text x="510" y="382" text-anchor="middle" dominant-baseline="central" style="fill:rgb(240, 153, 123);font-size:12px;text-anchor:middle;dominant-baseline:central">Dense(64, relu)</text>
 </g>

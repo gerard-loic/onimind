@@ -25,7 +25,8 @@ class Home{
 
     renderPlayers(){
         this.playersContainer.innerHTML = '';
-        this.players["players"].forEach(player => {
+        const sorted = [...this.players["players"]].sort((a, b) => (a.stars ?? 0) - (b.stars ?? 0));
+        sorted.forEach(player => {
             const el = document.createElement('div');
             el.className = 'player';
 

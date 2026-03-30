@@ -297,14 +297,14 @@ if __name__ == "__main__":
     #pt6 = CNNPlayer_v6()
     #pt6.load_weights('../saved-models/Kamae1.weights.h5', skip_layers=['value_adapter_conv', 'value_adapter_bn', 'value_adapter_relu'])
 
-    #pt6b = CNNPlayer_v6()
-    #pt6b.load_weights('../saved-models/Kamae5.weights.h5')
+    pt6b = CNNPlayer_v6()
+    pt6b.load_weights('../saved-models/Kamae2.weights.h5')
     #p2 = LookAheadDlPlayer(max_depth=2, dl_player=pt6b, n_best_moves=5)
 
     #p2 = MCTSPlayer(num_simulations=2000)
 
     p2 = DensePlayer_v7()
-    p2.load_weights('../saved-models/ppo-tairanauchu3-e2_iter90.weights.h5')
+    p2.load_weights('../saved-models/tairanauchu-alphazero1.weights.h5')
 
     gameSession = GameSession(player_one=p2, player_two=pr, number_of_games=1000)
     gameSession.start()

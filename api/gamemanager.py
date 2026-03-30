@@ -7,11 +7,27 @@ from card import Card
 from players import HeuristicPlayer, ApiPlayer, Player, RandomPlayer, LookAheadHeuristicPlayer
 from constants import *
 from exceptions import InvalidPlayerException, GameEndedException, InvalidSessionException, PlayerNotFoundException
+from dl_players_v6 import CNNPlayer_v6
+from dl_players_v4 import CNNPlayer_v4
+from dl_players_v7 import DensePlayer_v7
+
+kamae = CNNPlayer_v6()
+kamae.load_weights(filepath="../saved-models/Kamae5.weights.h5")
+
+musashi = CNNPlayer_v4()
+musashi.load_weights(filepath="../saved-models/Musashi3.weights.h5")
+
+tairanauchu = DensePlayer_v7()
+tairanauchu.load_weights(filepath="../saved-models/Tairanauchu3.weights.h5")
 
 players = {
-    'random' : { 'class' : RandomPlayer(), 'name' : 'Joueur aléatoire', 'description' : 'Joue des coups au hasard, sans aucune stratégie.', 'stars' : 1 },
-    'heuristic_regular' : { 'class' : HeuristicPlayer(heuristic_function='heuristic_regular'), 'name' : 'Joueur heuristique', 'description' : 'Évalue chaque coup grâce à une fonction heuristique simple.', 'stars' : 3 },
-    'heuristic_3lookahead_regular' : { 'class' : LookAheadHeuristicPlayer(max_depth=3, heuristic_function='heuristic_regular'), 'name' : 'Joueur anticipation', 'description' : 'Anticipe jusqu\'à 3 coups à l\'avance avec une heuristique avancée.', 'stars' : 5 },
+    'random' : { 'class' : RandomPlayer(), 'name' : 'Joueur aléatoire', 'description' : 'Joue des coups au hasard, sans aucune stratégie.', 'stars' : 0 },
+    'heuristic_regular' : { 'class' : HeuristicPlayer(heuristic_function='heuristic_regular'), 'name' : 'Joueur heuristique simple', 'description' : 'Évalue chaque coup grâce à une fonction heuristique simple.', 'stars' : 1 },
+    'heuristic_2lookahead_regular' : { 'class' : LookAheadHeuristicPlayer(max_depth=2, heuristic_function='heuristic_regular'), 'name' : 'Joueur heuristique (2 coups)', 'description' : 'Anticipe jusqu\'à 2 coups à l\'avance.', 'stars' : 3 },
+    'heuristic_3lookahead_regular' : { 'class' : LookAheadHeuristicPlayer(max_depth=2, heuristic_function='heuristic_regular'), 'name' : 'Joueur heuristique (3 coups)', 'description' : 'Anticipe jusqu\'à 3 coups à l\'avance.', 'stars' : 4 },
+    'kamae' : { 'class' : kamae, 'name' : 'Joueur CNN (Kamae5)', 'description' : 'Joueur sur base de réseau de neurones convolutif. (Modèle Kamae5)', 'stars' : 3},
+    'musashi' : { 'class' : musashi, 'name' : 'Joueur CNN (Musashi3)', 'description' : 'Joueur sur base de réseau de neurones convolutif. (Modèle Musashi3)', 'stars' : 2},
+    'tairanauchu' : { 'class' : tairanauchu, 'name' : 'Joueur CNN (Tairanauchu3)', 'description' : 'Joueur sur base de réseau de neurones convolutif. (Modèle Tairanauchu3)', 'stars' : 2}
 }
 
 class GameManager:
