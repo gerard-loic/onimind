@@ -12,6 +12,7 @@ from dl_players_v5 import CNNPlayer_v5
 from dl_players_v6 import CNNPlayer_v6
 from dl_players_v6b import CNNPlayer_v6b
 from dl_players_v7 import DensePlayer_v7
+from dl_players_v9 import DensePlayer_v9
 from dl_minimax import LookAheadDlPlayer
 import random
 import numpy as np
@@ -303,8 +304,13 @@ if __name__ == "__main__":
 
     #p2 = MCTSPlayer(num_simulations=2000)
 
-    p2 = DensePlayer_v7()
-    p2.load_weights('../saved-models/tairanauchu-alphazero1.weights.h5')
+    #p2 = DensePlayer_v7()
+    #p2.load_weights('../saved-models/tairanauchu-alphazero1.weights.h5')
+
+    p2 = DensePlayer_v9()
+    p2.load_weights('../saved-models/ppo-shigemori-e4_iter450.weights.h5')
+
+    
 
     gameSession = GameSession(player_one=p2, player_two=pr, number_of_games=1000)
     gameSession.start()
