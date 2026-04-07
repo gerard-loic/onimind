@@ -60,7 +60,7 @@ class AlphaZeroTrainer:
         self.update_opponent_threshold = update_opponent_threshold
 
     #Méthode principale
-    def train(self, n_iterations:int, freeze_trunk_iters:int=20):
+    def train(self, n_iterations:int, freeze_trunk_iters:int=10):
         #Initialisation
         self.optimizer = tf.keras.optimizers.Adam(self.learning_rate)
         self.player_p1.compile_for_rl()
@@ -96,12 +96,12 @@ class AlphaZeroTrainer:
             # Self-play avec MCTS (pour remplir le buffer)
             win, loss, draw = self._collect()
             wins_since_last_update += win
-            games_since_last_update += win + loss + draw
+            games_since_last_update += win + loss  # draw = timeouts discardés, exclus du win_rate
 
-            # N'entraîner que si le trunk est dégelé : évite de corrompre les têtes
-            # avec un signal RL bruité pendant la phase de collecte initiale
-            trunk_unfrozen = (freeze_trunk_iters == 0) or (i >= freeze_trunk_iters)
-            if len(self.buffer) >= self.minibatch_size and trunk_unfrozen:
+            # Entraîner dès que le buffer est suffisant.
+            # Pendant la phase de gel du tronc, seules les têtes sont entraînées
+            # (le tronc gelé est exclu de trainable_variables automatiquement).
+            if len(self.buffer) >= self.minibatch_size:
                 metrics = self._update()
             else:
                 metrics = {'policy_loss' : None, 'value_loss' : None}
@@ -179,6 +179,7 @@ class AlphaZeroTrainer:
     def _collect(self) -> list:
         #métrique de suivi
         wins = losses = draws = 0
+        game_lengths = []
 
         for _ in tqdm(range(self.n_games), desc="Self-play"):
             #Initialisation du jeu via Game (on l'utilise quand mm pour profiter des fonctions d'initialisation)
@@ -199,8 +200,9 @@ class AlphaZeroTrainer:
 
                 # En cas de boucle infinie (joueurs tournant en boucle sans arriver à une fin de jeu)
                 if step > 200:
-                    self.buffer.close(winner_player_i=None)
+                    self.buffer.discard_pending()  # signal trop bruité, on ignore la partie
                     draws += 1
+                    game_lengths.append(step)
                     break
 
                 #On récupère l'état
@@ -235,6 +237,7 @@ class AlphaZeroTrainer:
                 if game_ended:
                     winner_player_i = 1 if winner == game.player_one.position else 2
                     self.buffer.close(winner_player_i=winner_player_i)
+                    game_lengths.append(step)
                     if winner_player_i == 1:
                         wins += 1
                     else:
@@ -243,6 +246,8 @@ class AlphaZeroTrainer:
 
                 #Intervertir les joueurs pour le coup suivant
                 game.current_player, game.next_player = game.next_player, game.current_player
+        avg_len = np.mean(game_lengths) if game_lengths else 0
+        print(f"  → longueur parties : avg={avg_len:.1f} min={min(game_lengths)} max={max(game_lengths)}", flush=True)
         return wins, losses, draws
     
     #Sélectionne l'action finale
@@ -269,12 +274,7 @@ class AlphaZeroTrainer:
         return moves[chosen_idx]
 
 
-    @tf.function(input_signature=[
-        tf.TensorSpec(shape=(None, 5, 5, 10), dtype=tf.float32),
-        tf.TensorSpec(shape=(None, 1300),      dtype=tf.float32),
-        tf.TensorSpec(shape=(None, 1300),      dtype=tf.float32),
-        tf.TensorSpec(shape=(None,),           dtype=tf.float32),
-    ])
+    @tf.function
     def _train_step(self, states, pi, masks, z):
         """Step d'entraînement compilé (graph mode) — évite la retraçage TF à chaque epoch."""
         with tf.GradientTape() as tape:
@@ -437,10 +437,11 @@ class AlphaZeroTrainer:
                     node, value = expand(board)
                     tree[h] = node
                 else:
-                    #Noeud déjà connu, on réutilise Q moyen comme valeur
+                    #Noeud déjà connu : valeur du point de vue du joueur qui vient d'arriver
+                    # Q est du POV du joueur qui joue depuis ce noeud → négation
                     node = tree[h]
                     vals = [node['Q'][i] for i in node['Q'] if node['N'][i] > 0]
-                    value = np.mean(vals) if vals else 0.0
+                    value = -np.mean(vals) if vals else 0.0
 
             #Backup
             #On remonte en alternant, la valeur est du point de vue du joueur qui a joué
@@ -481,14 +482,21 @@ class AlphaZeroBuffer():
         # float16 pour pi_mcts : précision suffisante, mémoire divisée par 2
         self._pending.append((state, pi_mcts.astype(np.float16), mask, player_i))
 
+    #Appelé en cas de timeout : on ignore la partie (signal trop bruité)
+    def discard_pending(self):
+        self._pending.clear()
+
     #Appelé en fin de partie - assigne z et transfert vers le buffer
-    def close(self, winner_player_i:int | None):
-        for (state, pi, mask, player_i) in self._pending:
+    def close(self, winner_player_i:int | None, gamma:float = 0.99):
+        n = len(self._pending)
+        for t, (state, pi, mask, player_i) in enumerate(self._pending):
             #z vu du joueur qui a joué (p1 = pair, p2 = impair)
             if winner_player_i is None:
                 z = 0.0
             else:
-                z = 1.0 if player_i == winner_player_i else -1.0
+                # discount selon la distance à la fin : positions récentes ont un signal plus fort
+                steps_to_end = n - 1 - t
+                z = (1.0 if player_i == winner_player_i else -1.0) * (gamma ** steps_to_end)
             self.buffer.append((state, pi, mask, z))
         self._pending.clear()
 
