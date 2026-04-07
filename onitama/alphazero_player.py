@@ -19,6 +19,7 @@ class MCTSNode:
 
 class AlphaZeroPlayer(Player):
     def __init__(self, dl_player:Player, num_simulations:int=100, c_puct:float=3, diagnose_winning_branches:bool=False, winning_q_threshold:float=-0.95):
+        self.name = "AlphaZeroPlayer"
         self.player = dl_player
         self.num_simulations = num_simulations
         self.c_puct = c_puct
