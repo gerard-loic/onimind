@@ -7,8 +7,8 @@ from tensorflow.keras import metrics
 import numpy as np
 
 
+#Métrique top K accuracy (pour évaluation tête de politique) - si le bon coup est dans les K meilleurs coups prédits par le réseau
 def top_k_accuracy(k):
-    """Crée une métrique top-k accuracy pour les logits"""
     def metric(y_true, y_pred):
         return metrics.sparse_top_k_categorical_accuracy(
             tf.argmax(y_true, axis=-1),  # Convertir one-hot en index
@@ -18,12 +18,7 @@ def top_k_accuracy(k):
     metric.__name__ = f'top_{k}_accuracy'
     return metric
 
-# V3 du joueur utilisant un réseau de neurones
-# MOINS EFFICACE
-# Modifications par rapport à V2 :
-# - Moins de filtres (64 au lieu de 128)
-# - Moins de blocs résiduels (2 au lieu de 5)
-# - Moins de dropout (0.2 au lieu de 0.4)
+#  A partir de v2, mais réduite
 class CNNPlayer_v3(Player):
     #Méthodes statiques
     #------------------------------------------------------------------------------------------------------------------------------------
@@ -47,20 +42,17 @@ class CNNPlayer_v3(Player):
     #------------------------------------------------------------------------------------------------------------------------------------
 
     # Constructeur
-    # n_filters:int : Nombre de canaux (filtres) dans les couches convolutionnelles
     # dropout_rate:float : % de dropout
-    # with_heuristic:bool : ???
-    def __init__(self, n_filters:int=128, dropout_rate:float=0.2, with_heuristic:bool=False):
+    def __init__(self, dropout_rate:float=0.2):
         super().__init__()
         self.name = "CNNPlayer_V3"
 
         #Paramètres du réseau
-        self.n_filters = 64        #Canaux de sortie de la couche de convolution (chaque filtre détecte un motif différent)
-        self.kernel_size = 3        #Taille du filtre : 3x3 pixels
+        self.n_filters = 64        
+        self.kernel_size = 3       
         self.n_residual_blocs = 2   #Nombre de blocs résiduels
-        self.n_moves = 52           #Nombre de mouvements possinles
-        self.dropout_rate = dropout_rate  #Taux de dropout pour la régularisation
-        self.with_heuristic = with_heuristic #Si TRUE : exploite les meilleures actions retournées pour essayer de déterminer celle qui est vraiment meilleure
+        self.n_moves = 52           
+        self.dropout_rate = dropout_rate  
 
         #Construction du réseau
         self.model = self._build_model()
@@ -104,28 +96,9 @@ class CNNPlayer_v3(Player):
         #Appliquer softmax pour obtenir les probabilités
         probs = self._softmax(masked_logits)
 
-        #@TODO Ne Semble pas vraiment meilleur
-        if self.with_heuristic:
-            #Si on utilise les heuristiques, on prend uniquement l'action 
-            # qui donne le meilleur score après avoir été jouée sur les 5 meilleiure
-            best_flat_idx = np.argsort(probs)[-5:]
-            best_score = float('-inf')
-            best_action = None
-            for idx in best_flat_idx:
-                if idx in action_to_move:
-                    action_tested = action_to_move[idx]
-                    #On applique l'action
-                    action_log = board.play_move(action=action_tested)
-                    score = board.heuristic_evaluation(from_current_player_point_of_view=False)
-                    #On annule
-                    board.cancel_last_move(last_move=action_log)
-                    if score > best_score:
-                        best_action = action_tested
-            return best_action
-        else:
-            #Sélectionner l'action avec la plus haute probabilité
-            best_flat_idx = np.argmax(probs)
-            best_action = action_to_move[best_flat_idx]
+        #Sélectionner l'action avec la plus haute probabilité
+        best_flat_idx = np.argmax(probs)
+        best_action = action_to_move[best_flat_idx]
 
         return best_action
 

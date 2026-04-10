@@ -13,7 +13,9 @@ from dl_players_v6 import CNNPlayer_v6
 from dl_players_v6b import CNNPlayer_v6b
 from dl_players_v7 import DensePlayer_v7
 from dl_players_v9 import DensePlayer_v9
+from dl_players_v10 import DensePlayer_v10
 from dl_minimax import LookAheadDlPlayer
+from alphazero_player import AlphaZeroPlayer
 import random
 import numpy as np
 from constants import *
@@ -282,7 +284,7 @@ if __name__ == "__main__":
     #game = Game(verbose=True, player_one=p1, player_two=p2)
     #game.playGame()
 
-    pr = LookAheadHeuristicPlayer(heuristic_function="heuristic_defensive", max_depth=2)
+    pr = LookAheadHeuristicPlayer(heuristic_function="heuristic_defensive", max_depth=3)
     #pr = HeuristicPlayer(heuristic_function="heuristic_defensive")
 
     #p1 = CNNPlayer_v2()
@@ -298,20 +300,24 @@ if __name__ == "__main__":
     #pt6 = CNNPlayer_v6()
     #pt6.load_weights('../saved-models/Kamae1.weights.h5', skip_layers=['value_adapter_conv', 'value_adapter_bn', 'value_adapter_relu'])
 
-    pt6b = CNNPlayer_v6()
-    pt6b.load_weights('../saved-models/Kamae2.weights.h5')
+    p = CNNPlayer_v6()
+    p.load_weights('../saved-models/Kamae5.weights.h5')
     #p2 = LookAheadDlPlayer(max_depth=2, dl_player=pt6b, n_best_moves=5)
+
+    #p2 = AlphaZeroPlayer(dl_player=p, num_simulations=1000)
+    p2 = LookAheadDlPlayer(max_depth=5, dl_player=p, n_best_moves=3)
 
     #p2 = MCTSPlayer(num_simulations=2000)
 
     #p2 = DensePlayer_v7()
     #p2.load_weights('../saved-models/tairanauchu-alphazero1.weights.h5')
 
-    p2 = DensePlayer_v9()
-    p2.load_weights('../saved-models/ppo-shigemori-e4_iter450.weights.h5')
+    #p2 = DensePlayer_v9()
+    #p2.load_weights('../saved-models/Shigemori3.weights.h5')
 
-    
+    #p2 = DensePlayer_v10()
+    #p2.load_weights('../saved-models/Sukoshi2.weights.h5')
 
-    gameSession = GameSession(player_one=p2, player_two=pr, number_of_games=1000)
+    gameSession = GameSession(player_one=p2, player_two=pr, number_of_games=100)
     gameSession.start()
     print(gameSession.getStats())

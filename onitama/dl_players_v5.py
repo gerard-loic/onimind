@@ -6,9 +6,8 @@ from tensorflow.keras import layers
 from tensorflow.keras import metrics
 import numpy as np
 
-
+#Métrique top K accuracy (pour évaluation tête de politique) - si le bon coup est dans les K meilleurs coups prédits par le réseau
 def top_k_accuracy(k):
-    """Crée une métrique top-k accuracy pour les logits"""
     def metric(y_true, y_pred):
         return metrics.sparse_top_k_categorical_accuracy(
             tf.argmax(y_true, axis=-1),  # Convertir one-hot en index
@@ -18,11 +17,7 @@ def top_k_accuracy(k):
     metric.__name__ = f'top_{k}_accuracy'
     return metric
 
-# V2 du joueur utilisant un réseau de neurones
-# Modifications par rapport à V1 :
-# - Implémentation d'une option permettant de sélectionner le meilleur coup avec également de l'heuristique
-# - Implémentation de métriques permettant de voir si le meilleur coup est dans les 3/5/10 coups sélectionnés par le modèle
-# - Utilisation d'Adam au lieu de AdamW (pour réduire l'over-fitting)
+# Architecture optimisée
 class CNNPlayer_v5(Player):
     #Méthodes statiques
     #------------------------------------------------------------------------------------------------------------------------------------
@@ -43,24 +38,23 @@ class CNNPlayer_v5(Player):
         return int(col), int(ligne), int(move_id)
 
 
-
-
     #------------------------------------------------------------------------------------------------------------------------------------
 
     # Constructeur
-    # dropout_rate:float : % de dropout
+    # dropout_rate:float : % de dropout pour les têtes
+    # residual_dropout_rate:float : Taux de dropout pour les blocs résiduels
     def __init__(self, dropout_rate:float=0.4, residual_dropout_rate:float=0.1):
         super().__init__()
-        self.name = "CNNPlayer"
+        self.name = "CNNPlayer_v5"
 
         #Paramètres du réseau
-        self.n_filters = 128        #Canaux de sortie de la couche de convolution (chaque filtre détecte un motif différent)
-        self.kernel_size = 3        #Taille du filtre : 3x3 pixels
+        self.n_filters = 128        
+        self.kernel_size = 3        
         self.n_residual_blocs = 5   #Nombre de blocs résiduels
         self.n_moves = 52
-        self.dropout_rate = dropout_rate                    #Taux de dropout pour les têtes (policy, value)
-        self.residual_dropout_rate = residual_dropout_rate  #Taux de dropout pour les blocs résiduels
-        self.with_ppo = False    #Si TRUE : utilisé dans le cadre d'un entraînement avec PPO
+        self.dropout_rate = dropout_rate                    
+        self.residual_dropout_rate = residual_dropout_rate  
+        self.with_ppo = False    
 
         #Construction du réseau
         self.model = self._build_model()

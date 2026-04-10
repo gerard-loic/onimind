@@ -33,7 +33,7 @@ players = {
     'kamae' : { 'class' : kamae, 'name' : 'Joueur CNN (Kamae5)', 'description' : 'Joueur sur base de réseau de neurones convolutif. (Modèle Kamae5)', 'stars' : 3},
     'musashi' : { 'class' : musashi, 'name' : 'Joueur CNN (Musashi3)', 'description' : 'Joueur sur base de réseau de neurones convolutif. (Modèle Musashi3)', 'stars' : 2},
     'tairanauchu' : { 'class' : tairanauchu, 'name' : 'Joueur dense (Tairanauchu3)', 'description' : 'Joueur sur base de réseau de neurones dense. (Modèle Tairanauchu3)', 'stars' : 2},
-    'kamaealphazero' : { 'class' : kamaealphazero, 'name' : 'Joueur Kamae+AlphaZero', 'description' : 'Joueur basé sur Kamae5 et un algorithme alpha zero', 'stars' : 5},
+    'kamaealphazero' : { 'class' : kamaealphazero, 'name' : 'Joueur Kamae+AlphaZero', 'description' : 'Joueur basé sur Kamae5 et un algorithme alpha zero', 'stars' : 6},
     'kamaeaminimax' : { 'class' : kamaeminimax, 'name' : 'Joueur Kamae+Minimax', 'description' : 'Joueur basé sur Kamae5 et un algorithme minimax selectif', 'stars' : 5},
 
 

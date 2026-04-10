@@ -40,7 +40,7 @@ class Home{
 
             const stars = document.createElement('div');
             stars.className = 'stars';
-            const total = 5;
+            const total = 6;
             const filled = player.stars ?? 0;
             for (let i = 1; i <= total; i++) {
                 const star = document.createElement('span');

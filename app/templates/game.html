@@ -9,7 +9,67 @@
     
 </head>
 <body>
-    
+
+    <!-- Écran de préchargement -->
+    <div id="preloader">
+        <img id="preloader-logo" src="{{ url_for('static', filename='images/onitama-logo.svg') }}" alt="Onitama">
+        <div id="preloader-bar-wrap">
+            <div id="preloader-bar"></div>
+        </div>
+        <div id="preloader-label">Chargement...</div>
+    </div>
+
+    <!-- Contenu principal (masqué jusqu'au chargement) -->
+    <div id="main-content" style="visibility:hidden">
+
+    <!-- Panneau haut gauche -->
+    <div id="side-panel">
+        <img id="side-logo" src="{{ url_for('static', filename='images/onitama-logo.svg') }}" alt="Onitama">
+        <nav id="side-nav">
+            <a href="{{ url_for('index') }}">Retour à l'accueil</a>
+            <a href="#" id="btn-rules">Comment jouer ?</a>
+        </nav>
+    </div>
+
+    <!-- Modale fin de partie -->
+    <div id="endgame-overlay">
+        <div id="endgame-modal">
+            <div id="endgame-ninja"></div>
+            <h2 id="endgame-title"></h2>
+            <p id="endgame-message"></p>
+            <button id="endgame-btn" onclick="window.location.reload()">Rejouer</button>
+        </div>
+    </div>
+
+    <!-- Modale règles du jeu -->
+    <div id="rules-overlay">
+        <div id="rules-modal">
+            <button id="rules-close">&times;</button>
+            <h2>Comment jouer à Onitama ?</h2>
+            <div id="rules-content">
+                <p><strong>Onitama</strong> est un jeu d'affrontement à deux joueurs, rapide et stratégique, inspiré des arts martiaux.</p>
+
+                <h3>Mise en place</h3>
+                <p>Chaque joueur dispose d'un <strong>Maître</strong> et de quatre <strong>Étudiants</strong> placés sur la première rangée de son côté. Cinq cartes de mouvement sont tirées au sort : deux pour chaque joueur, et une carte neutre posée à côté du plateau.</p>
+
+                <h3>Déroulement d'un tour</h3>
+                <ol>
+                    <li>Choisissez l'une de vos deux cartes de mouvement.</li>
+                    <li>Déplacez l'une de vos pièces (Maître ou Étudiant) selon le schéma indiqué sur la carte choisie.</li>
+                    <li>Échangez la carte utilisée avec la carte neutre, qui devient disponible pour l'adversaire au tour suivant.</li>
+                </ol>
+                <p>Si une de vos pièces atterrit sur une case occupée par une pièce adverse, elle la capture et la retire du jeu.</p>
+
+                <h3>Conditions de victoire</h3>
+                <p>Il existe deux façons de remporter la partie :</p>
+                <ul>
+                    <li><strong>La Voie de la Pierre</strong> : capturez le Maître adverse.</li>
+                    <li><strong>La Voie du Torrent</strong> : amenez votre propre Maître sur la case temple adverse (la case centrale de la rangée de départ de l'adversaire).</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
     <div class="container-global">
         <div id="ninja">
             <div id="parole">Bla bla...</div>
@@ -34,10 +94,80 @@
         </div>
     </div>
 
+    </div> <!-- fin #main-content -->
+
     <script>
         const API_URL = "{{ api_url }}";
         const API_KEY = "{{ api_key }}";
     </script>
+    <script>
+        (function() {
+            const IMAGES = [
+                "{{ url_for('static', filename='images/onitama-texture.svg') }}",
+                "{{ url_for('static', filename='images/board.png') }}",
+                "{{ url_for('static', filename='images/onitama-logo.svg') }}",
+                "{{ url_for('static', filename='images/ninja.png') }}",
+                "{{ url_for('static', filename='images/ninja_sleep.png') }}",
+                "{{ url_for('static', filename='images/ninja_happy.png') }}",
+                "{{ url_for('static', filename='images/ninja_unhappy.png') }}",
+                "{{ url_for('static', filename='images/etudiant_rouge.png') }}",
+                "{{ url_for('static', filename='images/etudiant_bleu.png') }}",
+                "{{ url_for('static', filename='images/maitre_rouge.png') }}",
+                "{{ url_for('static', filename='images/maitre_bleu.png') }}",
+                "{{ url_for('static', filename='images/carte_0.png') }}",
+                "{{ url_for('static', filename='images/carte_1.png') }}",
+                "{{ url_for('static', filename='images/carte_2.png') }}",
+                "{{ url_for('static', filename='images/carte_3.png') }}",
+                "{{ url_for('static', filename='images/carte_4.png') }}",
+                "{{ url_for('static', filename='images/carte_5.png') }}",
+                "{{ url_for('static', filename='images/carte_6.png') }}",
+                "{{ url_for('static', filename='images/carte_7.png') }}",
+                "{{ url_for('static', filename='images/carte_8.png') }}",
+                "{{ url_for('static', filename='images/carte_9.png') }}",
+                "{{ url_for('static', filename='images/carte_10.png') }}",
+                "{{ url_for('static', filename='images/carte_11.png') }}",
+                "{{ url_for('static', filename='images/carte_12.png') }}",
+                "{{ url_for('static', filename='images/carte_13.png') }}",
+                "{{ url_for('static', filename='images/carte_14.png') }}",
+                "{{ url_for('static', filename='images/carte_15.png') }}",
+            ];
+
+            const bar = document.getElementById('preloader-bar');
+            const label = document.getElementById('preloader-label');
+            let loaded = 0;
+
+            function onLoad() {
+                loaded++;
+                const pct = Math.round(loaded / IMAGES.length * 100);
+                bar.style.width = pct + '%';
+                label.textContent = pct < 100 ? `Chargement... ${pct}%` : 'Prêt !';
+                if (loaded === IMAGES.length) showGame();
+            }
+
+            function showGame() {
+                const preloader = document.getElementById('preloader');
+                preloader.classList.add('fade-out');
+                preloader.addEventListener('transitionend', () => {
+                    preloader.style.display = 'none';
+                    document.getElementById('main-content').style.visibility = 'visible';
+                }, { once: true });
+            }
+
+            IMAGES.forEach(src => {
+                const img = new Image();
+                img.onload = img.onerror = onLoad;
+                img.src = src;
+            });
+        })();
+    </script>
     <script src="{{ url_for('static', filename= 'js/game.js') }}"></script>
+    <script>
+        const btnRules = document.getElementById('btn-rules');
+        const overlay = document.getElementById('rules-overlay');
+        const closeBtn = document.getElementById('rules-close');
+        btnRules.addEventListener('click', e => { e.preventDefault(); overlay.classList.add('visible'); });
+        closeBtn.addEventListener('click', () => overlay.classList.remove('visible'));
+        overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('visible'); });
+    </script>
 </body>
 </html>

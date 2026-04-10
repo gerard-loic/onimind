@@ -27,9 +27,6 @@ class CNNPlayer_v1(Player):
 
 
     #------------------------------------------------------------------------------------------------------------------------------------
-    """
-    n_filters: nombre de filtres (ou canaux) dans les couches convolutionnelles
-    """
 
     # Constructeur
     # dropout_rate:float : % de dropout
@@ -38,11 +35,11 @@ class CNNPlayer_v1(Player):
         self.name = "CNNPlayer_v1"
 
         #Paramètres du réseau
-        self.n_filters = 128        #Canaux de sortie de la couche de convolution (chaque filtre détecte un motif différent)
-        self.kernel_size = 3        #Taille du filtre : 3x3 pixels
+        self.n_filters = 128        
+        self.kernel_size = 3        
         self.n_residual_blocs = 5   #Nombre de blocs résiduels
         self.n_moves = 52
-        self.dropout_rate = dropout_rate  #Taux de dropout pour la régularisation
+        self.dropout_rate = dropout_rate  
 
         #Construction du réseau
         self.model = self._build_model()

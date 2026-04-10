@@ -6,9 +6,8 @@ from tensorflow.keras import layers
 from tensorflow.keras import metrics
 import numpy as np
 
-
+#Métrique top K accuracy (pour évaluation tête de politique) - si le bon coup est dans les K meilleurs coups prédits par le réseau
 def top_k_accuracy(k):
-    """Crée une métrique top-k accuracy pour les logits"""
     def metric(y_true, y_pred):
         return metrics.sparse_top_k_categorical_accuracy(
             tf.argmax(y_true, axis=-1),  # Convertir one-hot en index
@@ -18,12 +17,8 @@ def top_k_accuracy(k):
     metric.__name__ = f'top_{k}_accuracy'
     return metric
 
+#Loss personnalisée pour la tête de politique. (Le masque force softmax à ne distribuer la probabilité qu'entre les coups légaux. )
 def masked_categorical_crossentropy(label_smoothing=0.1):
-    """Loss cross-entropy masquée : y_true = concat([one_hot (1300), valid_mask (1300)])
-
-    Le label_smoothing est appliqué uniquement sur les classes valides pour éviter
-    que les -1e9 des actions invalides ne dominent la loss (bug : 7.69e-5 × 1e9 ≈ 76 923 par classe).
-    """
     def loss(y_true, y_pred):
         one_hot = y_true[:, :1300]
         mask = y_true[:, 1300:]   # 0 pour coups valides, -1e9 pour invalides
@@ -41,8 +36,8 @@ def masked_categorical_crossentropy(label_smoothing=0.1):
     loss.__name__ = 'masked_categorical_crossentropy'
     return loss
 
+#Accuracy sur les coups valides uniquement
 def masked_accuracy():
-    """Accuracy sur coups valides uniquement : y_true = concat([one_hot, valid_mask])"""
     def metric(y_true, y_pred):
         one_hot = y_true[:, :1300]
         mask = y_true[:, 1300:]
@@ -51,8 +46,8 @@ def masked_accuracy():
     metric.__name__ = 'policy_logits_accuracy'
     return metric
 
+#Idem top_k_accuracy mai sur les courps valides uniquement
 def masked_top_k_accuracy(k):
-    """Top-k accuracy sur coups valides uniquement : y_true = concat([one_hot, valid_mask])"""
     def metric(y_true, y_pred):
         one_hot = y_true[:, :1300]
         mask = y_true[:, 1300:]
@@ -61,7 +56,7 @@ def masked_top_k_accuracy(k):
     metric.__name__ = f'top_{k}_accuracy'
     return metric
 
-# V6 du joueur utilisant un réseau de neurones
+# Issu de l'architecture de v6, mais avec 10 couches de blocs résiduels (plus profond)
 class CNNPlayer_v8(Player):
     #Méthodes statiques
     #------------------------------------------------------------------------------------------------------------------------------------
@@ -82,24 +77,23 @@ class CNNPlayer_v8(Player):
         return int(col), int(ligne), int(move_id)
 
 
-
-
     #------------------------------------------------------------------------------------------------------------------------------------
 
     # Constructeur
-    # dropout_rate:float : % de dropout
+    # dropout_rate:float : % de dropout pour les tetes
+    # residual_dropout_rate:float : % de dropout sur les blocs résiduels
     def __init__(self, dropout_rate:float=0.4, residual_dropout_rate:float=0.1):
         super().__init__()
         self.name = "CNNPlayer"
 
         #Paramètres du réseau
-        self.n_filters = 128        #Canaux de sortie de la couche de convolution (chaque filtre détecte un motif différent)
-        self.kernel_size = 3        #Taille du filtre : 3x3 pixels
+        self.n_filters = 128        
+        self.kernel_size = 3        #Taille du filtre
         self.n_residual_blocs = 10   #Nombre de blocs résiduels
         self.n_moves = 52
-        self.dropout_rate = dropout_rate                    #Taux de dropout pour les têtes (policy, value)
-        self.residual_dropout_rate = residual_dropout_rate  #Taux de dropout pour les blocs résiduels
-        self.with_ppo = False    #Si TRUE : utilisé dans le cadre d'un entraînement avec PPO
+        self.dropout_rate = dropout_rate                    
+        self.residual_dropout_rate = residual_dropout_rate  
+        self.with_ppo = False   
 
         #Construction du réseau
         self.model = self._build_model()

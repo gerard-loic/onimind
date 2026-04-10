@@ -7,8 +7,8 @@ from tensorflow.keras import metrics
 import numpy as np
 
 
+#Métrique top K accuracy (pour évaluation tête de politique) - si le bon coup est dans les K meilleurs coups prédits par le réseau
 def top_k_accuracy(k):
-    """Crée une métrique top-k accuracy pour les logits"""
     def metric(y_true, y_pred):
         return metrics.sparse_top_k_categorical_accuracy(
             tf.argmax(y_true, axis=-1),
@@ -18,8 +18,8 @@ def top_k_accuracy(k):
     metric.__name__ = f'top_{k}_accuracy'
     return metric
 
+#Loss personnalisée pour la tête de politique. (Le masque force softmax à ne distribuer la probabilité qu'entre les coups légaux. )
 def masked_categorical_crossentropy(label_smoothing=0.1):
-    """Loss cross-entropy masquée : y_true = concat([one_hot (1300), valid_mask (1300)])"""
     def loss(y_true, y_pred):
         one_hot = y_true[:, :1300]
         mask = y_true[:, 1300:]   # 0 pour coups valides, -1e9 pour invalides
@@ -28,8 +28,8 @@ def masked_categorical_crossentropy(label_smoothing=0.1):
     loss.__name__ = 'masked_categorical_crossentropy'
     return loss
 
+#Accuracy sur les coups valides uniquement
 def masked_accuracy():
-    """Accuracy sur coups valides uniquement : y_true = concat([one_hot, valid_mask])"""
     def metric(y_true, y_pred):
         one_hot = y_true[:, :1300]
         mask = y_true[:, 1300:]
@@ -38,6 +38,7 @@ def masked_accuracy():
     metric.__name__ = 'policy_logits_accuracy'
     return metric
 
+#Idem top_k_accuracy mai sur les courps valides uniquement
 def masked_top_k_accuracy(k):
     """Top-k accuracy sur coups valides uniquement : y_true = concat([one_hot, valid_mask])"""
     def metric(y_true, y_pred):
@@ -49,7 +50,7 @@ def masked_top_k_accuracy(k):
     return metric
 
 
-# V9 du joueur utilisant un réseau de neurones dense allégé
+# Architecture sur réseau dense, sans LayerNormalization, sans Dropout, allégée avec skip connection 
 class DensePlayer_v10(Player):
     #Méthodes statiques
     #------------------------------------------------------------------------------------------------------------------------------------
@@ -68,19 +69,14 @@ class DensePlayer_v10(Player):
     #------------------------------------------------------------------------------------------------------------------------------------
 
     # Constructeur
-    # hidden_units:list : taille de chaque couche dense du tronc
-    # dropout_rate:float : % de dropout pour les têtes
-    # trunk_dropout_rate:float : % de dropout entre les couches du tronc
-    def __init__(self, dropout_rate:float=0.4, trunk_dropout_rate:float=0.1):
+    def __init__(self):
         super().__init__()
         self.name = "DensePlayer-v10"
 
         #Paramètres du réseau
         self.hidden_units = [128, 128, 64]
         self.n_moves = 52
-        self.dropout_rate = dropout_rate            #Taux de dropout pour les têtes (policy, value)
-        self.trunk_dropout_rate = trunk_dropout_rate  #Taux de dropout entre les couches du tronc
-        self.with_ppo = False   #Si TRUE : utilisé dans le cadre d'un entraînement avec PPO
+        self.with_ppo = False
 
         #Construction du réseau
         self.model = self._build_model()
@@ -92,20 +88,16 @@ class DensePlayer_v10(Player):
         self.with_ppo = with_ppo
 
     def play(self, board:Board):
-        #On récupère le state
         state = np.array(board.get_state())
-        #On le transpose (10, 5, 5) => (5, 5, 10) puis on aplatit en (250,)
-        state = np.transpose(state, (1, 2, 0))
+        state = np.transpose(state, (1, 2, 0))#=(10, 5, 5) => (5, 5, 10)
 
-        #On récupère les mouvements possibles
         available_moves = board.get_available_moves()
 
         if len(available_moves) == 0:
             return None
 
         #On effectue la prédiction
-        policy_logits, value = self.predict(state)
-        # value = float entre -1 (position perdue) et +1 (position gagnée)
+        policy_logits, value = self.predict(state) #Value entre -1 et +1
         policy_logits = np.array(policy_logits).flatten()  # (1300,)
 
         #Créer un masque des actions valides
@@ -211,15 +203,10 @@ class DensePlayer_v10(Player):
         print(f"Modèle compilé pour entraînement supervisé (policy seulement, label_smoothing={label_smoothing}, weight_decay={weight_decay}, use_mask={use_mask})")
 
     #Compiler pour entraînement RL (tout entraînable)
-    # rl_dropout_rate : dropout des têtes réduit pour RL (signal bruité → moins de régularisation)
-    # Le dropout du tronc (trunk_dropout_rate) reste inchangé
-    def compile_for_rl(self, learning_rate=3e-4, rl_dropout_rate=0.1):
+    def compile_for_rl(self, learning_rate=3e-4):
         self.unfreeze_value_head()
         self.unfreeze_trunk()
-        for layer in self.model.layers:
-            if isinstance(layer, layers.Dropout) and 'trunk' not in layer.name:
-                layer.rate = rl_dropout_rate
-        print(f"Toutes les couches dégelées pour RL (dropout têtes → {rl_dropout_rate})")
+        print("Toutes les couches dégelées pour RL")
 
     #Entraîne le modèle
     def fit(self, x, y, **kwargs):
@@ -240,21 +227,6 @@ class DensePlayer_v10(Player):
     #Affiche un résumé du modèle
     def summary(self):
         return self.model.summary()
-
-    #Désactive tous les dropouts (utile pour le pré-entraînement supervisé)
-    def disable_dropout(self):
-        for layer in self.model.layers:
-            if isinstance(layer, layers.Dropout):
-                layer.rate = 0.0
-
-    #Restaure les taux de dropout originaux (avant passage en RL)
-    def enable_dropout(self):
-        for layer in self.model.layers:
-            if isinstance(layer, layers.Dropout):
-                if 'trunk' in layer.name:
-                    layer.rate = self.trunk_dropout_rate
-                else:
-                    layer.rate = self.dropout_rate
 
     #Gèle la tête de valeur
     def freeze_value_head(self):
@@ -293,24 +265,22 @@ class DensePlayer_v10(Player):
         #Aplatir le board en vecteur (250,)
         x = layers.Flatten(name='trunk_flatten')(inputs)
 
-        #Tronc commun : couches denses empilées
-        # → pas de décalage train/inférence quand batch_size=1 (MCTS)
+        #Tronc commun : couches denses empilées avec skip connection sur les blocs 0→1 (128→128)
         for i, units in enumerate(self.hidden_units):
+            shortcut = x if i == 1 else None   # sauvegarde avant le bloc 1
             x = layers.Dense(units, name=f'trunk_dense_{i}')(x)
             x = layers.Activation('relu', name=f'trunk_relu_{i}')(x)
-            if self.trunk_dropout_rate > 0.0:
-                x = layers.Dropout(self.trunk_dropout_rate, name=f'trunk_dropout_{i}')(x)
+            if shortcut is not None:            # skip connection après le bloc 1
+                x = layers.Add(name='trunk_skip_add')([x, shortcut])
 
         #Tête de politique (Policy)
         # Couche intermédiaire avant la projection finale (évite le saut direct 256→1300)
         policy = layers.Dense(64, activation='relu', name='policy_hidden')(x)
-        policy = layers.Dropout(self.dropout_rate, name='policy_dropout')(policy)
         policy_logits = layers.Dense(5 * 5 * self.n_moves, activation=None, name='policy_logits')(policy)
         #sortie: policy_logits → shape (batch, 1300)
 
         #Tête de valeur
         value = layers.Dense(64, activation='relu', name='value_dense1')(x)
-        value = layers.Dropout(self.dropout_rate, name='value_dropout')(value)
         value = layers.Dense(32, activation='relu', name='value_dense2')(value)
         value_output = layers.Dense(1, activation='tanh', name='value_output')(value)
         #sortie: value_output → shape (batch, 1)

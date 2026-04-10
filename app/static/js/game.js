@@ -1,6 +1,5 @@
 class Onitama{
     constructor(player){
-        this.player = player;
         this.board = this.getRef('board');
 
         this.squares = [];
@@ -283,18 +282,36 @@ class Onitama{
                 this.talk(this.textes['red_turn_destination']);
                 this.selectDestinationSquares();
             }else{
-                this.talk("OK ! Patientez, c'est au tour de l'IA...");
                 this.play();
             }
         }
     }
 
     setWinner(){
+        let overlay = this.getRef("endgame-overlay");
+        let ninja = this.getRef("endgame-ninja");
+        let title = this.getRef("endgame-title");
+        let message = this.getRef("endgame-message");
+
+        ninja.classList.remove('happy', 'unhappy');
+
         if(this.current_state.winner == "IA"){
-            this.talk(this.textes['winner_IA']);
+            ninja.classList.add('unhappy');
+            title.textContent = "Défaite...";
+            message.textContent = this.textes['winner_IA'];
+            this.talk(this.textes['winner_IA'], "unhappy");
         }else{
-            this.talk(this.textes['winner_HUMAN']);
+            ninja.classList.add('happy');
+            title.textContent = "Victoire !";
+            message.textContent = this.textes['winner_HUMAN'];
+            this.talk(this.textes['winner_HUMAN'], "happy");
         }
+
+        setTimeout(() => { overlay.classList.add('visible'); }, 1500);
+
+        overlay.addEventListener('click', (e) => {
+            if(e.target === overlay) overlay.classList.remove('visible');
+        }, { once: true });
     }
 
     createGame(){
@@ -355,10 +372,10 @@ class Onitama{
 
             if(ref.current_state.ended){
                 console.log("ENDED !!!!!!");
+                ref.updateBoard(false, false, false);
                 ref.setWinner();
                 ref.reinitState();
                 ref.updateSquares();
-                //ref.updateBoard(true, true);
             }else{
                 ref.updateBoard(true, true);
                 ref.reinitState();
@@ -386,9 +403,6 @@ class Onitama{
         let ref = this;
         xhr.addEventListener('readystatechange', function () {
         if (this.readyState === this.DONE) {
-            console.log("REPONSE");
-            console.log(this.responseText);
-            
 
             let temp_state = JSON.parse(this.responseText);
             for(let i = 0; i < ref.current_state.player_cards.length; i++){
@@ -544,7 +558,7 @@ class Onitama{
         
         
         if(this.current_state.current_player == "IA"){
-            this.talk(this.textes['blue_turn']);
+            this.talk(this.textes['blue_turn'], "sleep");
         }else{
             this.talk(this.textes['red_turn']);
         }
@@ -621,8 +635,14 @@ class Onitama{
         
     }
 
-    talk(texte){
+    talk(texte, variant = ""){
         this.getRef("parole").innerHTML = texte;
+        if(variant == ""){
+            this.getRef("character").classList.remove('happy', 'unhappy', 'sleep');
+        }else{
+            this.getRef("character").classList.remove('happy', 'unhappy', 'sleep');
+            this.getRef("character").classList.add(variant);
+        }
     }
 
     getRef(name){
@@ -635,5 +655,5 @@ class Onitama{
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    game = new Onitama("test");
+    game = new Onitama();
 });

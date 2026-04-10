@@ -3,8 +3,6 @@ from board import Board
 import numpy as np
 from dl_players_v7 import DensePlayer_v7
 from dl_players_v6 import CNNPlayer_v6
-from game import Game
-from game import GameSession
 from dl_minimax import LookAheadDlPlayer
 
 
@@ -39,7 +37,6 @@ class AlphaZeroPlayer(Player):
         for child, eta in zip(children, noise):
             child.P = 0.75 * child.P + 0.25 * eta
 
-        print("PLAY")
 
         for i in range(self.num_simulations - 1):
             self._selection(board=board, node=tree)
@@ -200,20 +197,3 @@ class AlphaZeroPlayer(Player):
    
 
 
-if __name__ == "__main__":
-    #p = DensePlayer_v7()
-    #p.load_weights(filepath="../saved-models/Tairanauchu3.weights.h5")
-    p = CNNPlayer_v6()
-    p.load_weights(filepath="../saved-models/Kamae5.weights.h5")
-    #game = Game(player_one=p, player_two=p)
-
-    mmp = LookAheadDlPlayer(max_depth=5, dl_player=p, n_best_moves=3)
-    paz = AlphaZeroPlayer(dl_player=p, num_simulations=1000, diagnose_winning_branches=True)
-    #paz.play(board=game.board)
-
-    opponent = LookAheadHeuristicPlayer(max_depth=3, heuristic_function="heuristic_defensive")
-
-    gs = GameSession(player_one=paz, player_two=mmp, number_of_games=1)
-    gs.start()
-
-    print(gs.getStats())

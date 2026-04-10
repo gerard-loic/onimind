@@ -7,7 +7,7 @@ from tensorflow.keras import metrics
 import numpy as np
 
 
-# Métrique top-k accuracy pour les policy
+#Métrique top K accuracy (pour évaluation tête de politique) - si le bon coup est dans les K meilleurs coups prédits par le réseau
 def top_k_accuracy(k):
     def metric(y_true, y_pred):
         return metrics.sparse_top_k_categorical_accuracy(
@@ -18,7 +18,7 @@ def top_k_accuracy(k):
     metric.__name__ = f'top_{k}_accuracy'
     return metric
 
-#Loss cross-entropy masquée (label smoothing appliqué uniquement sur les classes valides pour éviter qie les actions invalident ne dominent la loss)
+#Loss personnalisée pour la tête de politique. (Le masque force softmax à ne distribuer la probabilité qu'entre les coups légaux. )
 def masked_categorical_crossentropy(label_smoothing=0.1):
     def loss(y_true, y_pred):
         one_hot = y_true[:, :1300]
@@ -37,7 +37,7 @@ def masked_categorical_crossentropy(label_smoothing=0.1):
     loss.__name__ = 'masked_categorical_crossentropy'
     return loss
 
-#Accuracy sur les coups valides uniquements
+#Accuracy sur les coups valides uniquement
 def masked_accuracy():
     def metric(y_true, y_pred):
         one_hot = y_true[:, :1300]
@@ -47,7 +47,7 @@ def masked_accuracy():
     metric.__name__ = 'policy_logits_accuracy'
     return metric
 
-#Top-k accuracy sur les coups valides uniquement
+#Idem top_k_accuracy mai sur les courps valides uniquement
 def masked_top_k_accuracy(k):
     """Top-k accuracy sur coups valides uniquement : y_true = concat([one_hot, valid_mask])"""
     def metric(y_true, y_pred):
@@ -85,19 +85,20 @@ class CNNPlayer_v6(Player):
     #------------------------------------------------------------------------------------------------------------------------------------
 
     # Constructeur
-    # dropout_rate:float : % de dropout
+    # dropout_rate:float : % de dropout pour les têtes
+    # residual_dropout_rate:float : Taux de dropout pour les blocs résiduels
     def __init__(self, dropout_rate:float=0.4, residual_dropout_rate:float=0.1):
         super().__init__()
         self.name = "CNNPlayer"
 
         #Paramètres du réseau
-        self.n_filters = 128        #Canaux de sortie de la couche de convolution (chaque filtre détecte un motif différent)
-        self.kernel_size = 3        #Taille du filtre : 3x3 pixels
+        self.n_filters = 128        
+        self.kernel_size = 3        
         self.n_residual_blocs = 5   #Nombre de blocs résiduels
         self.n_moves = 52
-        self.dropout_rate = dropout_rate                    #Taux de dropout pour les têtes (policy, value)
-        self.residual_dropout_rate = residual_dropout_rate  #Taux de dropout pour les blocs résiduels
-        self.with_ppo = False    #Si TRUE : utilisé dans le cadre d'un entraînement avec PPO
+        self.dropout_rate = dropout_rate                    
+        self.residual_dropout_rate = residual_dropout_rate  
+        self.with_ppo = False    
 
         #Construction du réseau
         self.model = self._build_model()

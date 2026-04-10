@@ -1,3 +1,5 @@
+import os
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -10,13 +12,17 @@ from auth import verify_credentials
 from card import CARDS
 import uvicorn
 
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
 SessionMemory.init()
 
 app = FastAPI()
 
+_allow_origins = [o.strip() for o in os.getenv("ALLOW_ORIGINS", "").split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5000", "http://localhost:5000", "http://193.168.144.145:5000"],
+    allow_origins=_allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
