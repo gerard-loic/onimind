@@ -201,6 +201,9 @@ Une fois la tête de politique entraînée, une deuxième phase d'entraînement 
 
 Les récompenses sont propagées rétrospectivement via la formule de GAE pour calculer l'avantage estimé de chaque coup. La mise à jour PPO réexploite ensuite ces données en clippant le ratio de politique pour limiter la divergence entre ancienne et nouvelle politique. La loss totale combine la policy loss clippée, une value loss et un bonus d'entropie pour maintenir l'exploration. Autrement dit on réunit trois objectifs distincts en un seul signal de gradient : la policy loss (« Apprendre quoi jouer »), la value loss (« apprendre à s’évaluer ») et l’entropie qui mesure à quel point la distribution des politiques est étalée sur les coups valides. Sans l’entropie le réseau à tendance à converger trop rapidement vers une situation déterministe, c’est-à-dire à jouer toujours les mêmes coups sans laisser sa chance à l’exploration. 
 
+
+![alt text](https://github.com/gerard-loic/onitama-rl/blob/master/notebooks/images/entrainement-PPO.png?raw=true)
+
 Ce cycle est répété pendant 750 itérations, avec une sauvegarde et un test d'efficacité toutes les 10 itérations consistant en une session de parties entre le modèle entraîné dans l’état et les joueurs de référence (Joueur heuristique avec minimax à 1, 2 et 3 niveaux de profondeur). Le taux de victoire (win rate) est mesuré sur 200 parties. 
 
 ![alt text](https://github.com/gerard-loic/onitama-rl/blob/master/notebooks/images/performances-apres-ppo.png?raw=true)
