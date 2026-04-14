@@ -60,7 +60,7 @@ class CNNPlayer_v3(Player):
         # Garder des références aux différentes parties du réseau
         self._identify_heads()
 
-    # Joue un coup
+    #Effectue la prédiction du coup à jouer
     def play(self, board:Board):
         #On récupère le state (matrice 5,5,10)
         state = np.array(board.get_state())

@@ -48,6 +48,7 @@ class CNNPlayer_v1(Player):
         self._identify_heads()
 
 
+    #Effectue la prédiction du coup à jouer
     def play(self, board:Board):
         #On récupère le state
         state = np.array(board.get_state())

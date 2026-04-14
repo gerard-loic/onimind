@@ -300,20 +300,20 @@ if __name__ == "__main__":
     #pt6 = CNNPlayer_v6()
     #pt6.load_weights('../saved-models/Kamae1.weights.h5', skip_layers=['value_adapter_conv', 'value_adapter_bn', 'value_adapter_relu'])
 
-    p = CNNPlayer_v6()
-    p.load_weights('../saved-models/Kamae5.weights.h5')
+    p2 = CNNPlayer_v6()
+    p2.load_weights('../saved-models/Kamae2.weights.h5')
     #p2 = LookAheadDlPlayer(max_depth=2, dl_player=pt6b, n_best_moves=5)
 
     #p2 = AlphaZeroPlayer(dl_player=p, num_simulations=1000)
-    p2 = LookAheadDlPlayer(max_depth=5, dl_player=p, n_best_moves=3)
+    #p2 = LookAheadDlPlayer(max_depth=5, dl_player=p2, n_best_moves=3)
 
     #p2 = MCTSPlayer(num_simulations=2000)
 
     #p2 = DensePlayer_v7()
-    #p2.load_weights('../saved-models/tairanauchu-alphazero1.weights.h5')
+    #p2.load_weights('../saved-models/Tairanauchu2.weights.h5')
 
     #p2 = DensePlayer_v9()
-    #p2.load_weights('../saved-models/Shigemori3.weights.h5')
+    #p2.load_weights('../saved-models/Shigemori1.weights.h5')
 
     #p2 = DensePlayer_v10()
     #p2.load_weights('../saved-models/Sukoshi2.weights.h5')

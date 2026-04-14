@@ -84,12 +84,14 @@ class DensePlayer_v10(Player):
         # Garder des références aux différentes parties du réseau
         self._identify_heads()
 
+    #Active le mode entrainement PPO (en PPO on échantillonne depuis la distribution, en inférence on retourne la meilleure action)
     def setPPOTraining(self, with_ppo:bool):
         self.with_ppo = with_ppo
 
+    #Effectue la prédiction du coup à jouer
     def play(self, board:Board):
         state = np.array(board.get_state())
-        state = np.transpose(state, (1, 2, 0))#=(10, 5, 5) => (5, 5, 10)
+        state = np.transpose(state, (1, 2, 0))  #(10, 5, 5) => (5, 5, 10) TODO ; à optimiser
 
         available_moves = board.get_available_moves()
 

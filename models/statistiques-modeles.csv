@@ -1,0 +1,20 @@
+Modèle,Type,Supervisé,Pré-entrainement tête valeur,Entraînement PPO,Architecture,Algorithme complémentaire,Classe du joueur,Win-rate vs LA1,Win-rate vs LA2,Win-rate vs LA3,Temps d'inférence
+Musashi1,CNN,X, , ,v4, ,CNNPlayer_v4,79,11,4, 
+Musashi2,CNN,X,X, ,v4, ,CNNPlayer_v4,80,18,3, 
+Musash3,CNN,X,X,X,v4, ,CNNPlayer_v4,88,40,20, 
+Kamae1,CNN,X, , ,v6, ,CNNPlayer_v6,85,33,9, 
+Kamae2,CNN,X, , ,v6, ,CNNPlayer_v6,93,37,11, 
+Kamae3,CNN,X,X, ,v6, ,CNNPlayer_v6,91,39,16, 
+Kamae4,CNN,X,X,X,v6, ,CNNPlayer_v6,95,47,17, 
+Kamae5,CNN,X,X,X,v6, ,CNNPlayer_v6,93,51,27, 
+Tairanauchu1,Dense,X, , ,v7, ,DensePlayer_v7,91,26,5, 
+Tairanauchu2,Dense,X,X, ,v7, ,DensePlayer_v7,94,26,6, 
+Tairanauchu3,Dense,X,X,X,v7, ,DensePlayer_v7,94,43,19, 
+Shigemori1,Dense,X, , ,v9, ,DensePlayer_v9,89,21,4, 
+Shigemori2,Dense,X,X, ,v9, ,DensePlayer_v9,89,28,4, 
+Shigemori3,Dense,X,X,X,v9, ,DensePlayer_v9,95,35,13, 
+Sukoshi1,Dense,X, , ,v10, ,DensePlayer_v10,79,15,4, 
+Sukoshi2,Dense,X,X, ,v10, ,DensePlayer_v10,79,15,5, 
+Sukoshi3,Dense,X,X,X,v10, ,DensePlayer_v10,90,25,9, 
+Shingen,Mixte,X,X,X,v6,Modèle Kamae5 + minimax sélectif,LookAheadDlPlayer,98,82,57,8343
+Nobunaga,Mixte,X,X,X,v6,Modèle Kamae5 + alphaZero,AlphaZeroPlayer,100,98,90,4500

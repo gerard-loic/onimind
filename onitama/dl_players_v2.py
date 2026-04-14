@@ -64,6 +64,8 @@ class CNNPlayer_v2(Player):
     def setPPOTraining(self, with_ppo:bool):
         self.with_ppo = with_ppo
 
+
+    #Effectue la prédiction du coup à jouer
     def play(self, board:Board):
         #On récupère le state
         state = np.array(board.get_state())
