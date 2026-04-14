@@ -19,27 +19,6 @@ def top_k_accuracy(k):
 
 # Version avec inférence tensorflow optimisée et gestion de l'entraînement PPO
 class CNNPlayer_v4(Player):
-    #Méthodes statiques
-    #------------------------------------------------------------------------------------------------------------------------------------
-
-    # Décode un vecteur aplati (1300,) en [col, ligne, move_idx] 
-    # Pour usage avec un array (1300,) en one-hot ou probabilités
-    # retourne col, ligne, move_idx
-    @staticmethod
-    def decode_flat_policy(flat_policy):
-        # Trouver l'index du maximum (ou du 1.0 si one-hot)
-        best_index = np.argmax(flat_policy)
-        
-        # Décoder l'index
-        col = best_index // (5 * 52)
-        ligne = (best_index // 52) % 5
-        move_id = best_index % 52
-        
-        return int(col), int(ligne), int(move_id)
-
-
-
-    #------------------------------------------------------------------------------------------------------------------------------------
 
     # Constructeur
     # dropout_rate:float : % de dropout
@@ -104,9 +83,11 @@ class CNNPlayer_v4(Player):
             #En PPO on échantillonne depuis la distribution
             p = probs / probs.sum() #Normalisation pour éviter un crash si ne fait pas exactement 1
             best_flat_idx = np.random.choice(len(probs), p=p)
-            #Pour éviter qu'on choisisse malgré tout une action avec une probabilité quasi nulle
+            
+            #Sécurité
             if best_flat_idx not in action_to_move:
                 best_flat_idx = np.argmax(probs)  # fallback greedy
+
             #log de la probabilité de l'action choisie sur la distribution MASQUÉE
             x_safe = np.where(masked_logits == -np.inf, -1e9, masked_logits)
             max_x = np.max(x_safe)
@@ -148,24 +129,6 @@ class CNNPlayer_v4(Player):
     def _predict_compiled(self, state):
         return self.model(state, training=False)
     
-    #Configure l'optimizeur et la loss
-    def compile(self, learning_rate:float=0.001):
-        opt = keras.optimizers.Adam(learning_rate=learning_rate)
-        
-        self.model.compile(
-            optimizer=opt,
-            loss=[
-                #Le modèle a deux sorties (politique et valeur), donc deux loss différentes
-                keras.losses.CategoricalCrossentropy(from_logits=True),  # Policy
-                keras.losses.MeanSquaredError()  # Value
-            ],
-            #La politique a plus de poids (1.0 vs 0.5), donc le modèle se concentre davantage sur bien jouer que sur bien évaluer.
-            loss_weights=[1.0, 0.5],
-            metrics=[
-                ['accuracy'],  # Policy metrics -> % de coups correctement prédits
-                ['mae']  # Value metrics -> Erreur moyenne absolue sur le score
-            ]
-        )
 
     #Compiler pour entraînement supervisé (on entraîne uniquement la policy)
     def compile_for_supervised_policy(self, learning_rate=0.001, label_smoothing=0.1, weight_decay=1e-4):

@@ -52,22 +52,6 @@ def masked_top_k_accuracy(k):
 
 # Architecture sur réseau dense, sans LayerNormalization, sans Dropout, allégée avec skip connection 
 class DensePlayer_v10(Player):
-    #Méthodes statiques
-    #------------------------------------------------------------------------------------------------------------------------------------
-
-    # Décode un vecteur aplati (1300,) en [col, ligne, move_idx]
-    # Pour usage avec un array (1300,) en one-hot ou probabilités
-    # retourne col, ligne, move_idx
-    @staticmethod
-    def decode_flat_policy(flat_policy):
-        best_index = np.argmax(flat_policy)
-        col = best_index // (5 * 52)
-        ligne = (best_index // 52) % 5
-        move_id = best_index % 52
-        return int(col), int(ligne), int(move_id)
-
-    #------------------------------------------------------------------------------------------------------------------------------------
-
     # Constructeur
     def __init__(self):
         super().__init__()
@@ -111,6 +95,7 @@ class DensePlayer_v10(Player):
         for action in available_moves:
             col, row = action.from_pos
             move_idx = action.move_idx
+
             #Calcul de l'index flat : col * (5 * 52) + row * 52 + move_idx
             flat_idx = col * (5 * 52) + row * 52 + move_idx
             masked_logits[flat_idx] = policy_logits[flat_idx]
@@ -123,14 +108,18 @@ class DensePlayer_v10(Player):
             #En PPO on échantillonne depuis la distribution
             p = probs / probs.sum() #Normalisation pour éviter un crash si ne fait pas exactement 1
             best_flat_idx = np.random.choice(len(probs), p=p)
-            #Pour éviter qu'on choisisse malgré tout une action avec une probabilité quasi nulle
+
+            #Sécurité
             if best_flat_idx not in action_to_move:
                 best_flat_idx = np.argmax(probs)  # fallback greedy
+
             #log de la probabilité de l'action choisie sur la distribution MASQUÉE
+            #PPO a besoin de log_prob dans le calcul de son ratio
             x_safe = np.where(masked_logits == -np.inf, -1e9, masked_logits)
             max_x = np.max(x_safe)
             log_prob = x_safe[best_flat_idx] - max_x - np.log(np.sum(np.exp(x_safe - max_x)))
-            #Masque à stocker dans le buffer : 0 pour actions valides, -1e9 pour invalides
+
+            #Masque permttant de réappliquer le masquage lors de la mise à jour de réseau sas avoir à recalculer les actions valides à partir de l'état
             valid_mask = np.where(masked_logits == -np.inf, -1e9, 0.0).astype(np.float32)
         else:
             #Sélectionner l'action avec la plus haute probabilité
@@ -143,14 +132,14 @@ class DensePlayer_v10(Player):
         else:
             return best_action
 
+    #Softmax stable numériquement (gère les -inf)
     def _softmax(self, x):
-        """Softmax stable numériquement (gère les -inf)"""
         x_safe = np.where(x == -np.inf, -1e9, x)
         exp_x = np.exp(x_safe - np.max(x_safe))
         return exp_x / exp_x.sum()
 
     # Réalise une prédiction
-    # state:(5,5,10) ou (batch,5,5,10) — sera aplati en interne
+    # state:(5,5,10) ou (batch,5,5,10)
     # Retourne :
     # policy_logits : (batch, 1300)
     # value : (batch, 1)
@@ -159,28 +148,15 @@ class DensePlayer_v10(Player):
         if len(state.shape) == 3:
             state = tf.expand_dims(state, 0)
 
+        #Utilise la version compilée
         return self._predict_compiled(tf.cast(state, tf.float32))
 
+
+    #Compile la fonction la première fois qu'elle est appelée, les appels suivant executent dctmt la version comppulée. Plus rapide surtout en inférence répétée
     @tf.function(input_signature=[tf.TensorSpec(shape=(None, 5, 5, 10), dtype=tf.float32)])
     def _predict_compiled(self, state):
         return self.model(state, training=False)
 
-    #Configure l'optimizeur et la loss
-    def compile(self, learning_rate:float=0.001):
-        opt = keras.optimizers.Adam(learning_rate=learning_rate)
-
-        self.model.compile(
-            optimizer=opt,
-            loss=[
-                keras.losses.CategoricalCrossentropy(from_logits=True),  # Policy
-                keras.losses.MeanSquaredError()  # Value
-            ],
-            loss_weights=[1.0, 0.5],
-            metrics=[
-                ['accuracy'],
-                ['mae']
-            ]
-        )
 
     #Compiler pour entraînement supervisé (on entraîne uniquement la policy)
     # use_mask=True : y doit être concat([one_hot (1300), valid_mask (1300)]) → shape (N, 2600)
@@ -204,7 +180,7 @@ class DensePlayer_v10(Player):
 
         print(f"Modèle compilé pour entraînement supervisé (policy seulement, label_smoothing={label_smoothing}, weight_decay={weight_decay}, use_mask={use_mask})")
 
-    #Compiler pour entraînement RL (tout entraînable)
+    #Compiler pour entraînement RL (nom de méthode à reprendre, pas vraiment compilation)
     def compile_for_rl(self, learning_rate=3e-4):
         self.unfreeze_value_head()
         self.unfreeze_trunk()

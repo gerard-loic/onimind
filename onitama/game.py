@@ -10,7 +10,6 @@ from dl_players_v3 import CNNPlayer_v3
 from dl_players_v4 import CNNPlayer_v4
 from dl_players_v5 import CNNPlayer_v5
 from dl_players_v6 import CNNPlayer_v6
-from dl_players_v6b import CNNPlayer_v6b
 from dl_players_v7 import DensePlayer_v7
 from dl_players_v9 import DensePlayer_v9
 from dl_players_v10 import DensePlayer_v10
