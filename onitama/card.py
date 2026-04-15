@@ -82,12 +82,6 @@ class Card:
 
     # Retourne les mouvements possibles [(nex_x:int, new_y:int, move_idx:int)] depuis une position transmise
     def get_moves_from_position(self, position:tuple, from_player_point_of_view:int=1):
-        """
-        Retourne les positions absolues accessibles depuis from_pos
-        
-        from_pos: (x, y) position de départ
-        player: 0 ou 1 (car les mouvements sont inversés pour joueur 2)
-        """
         x, y = position
         valid_moves = []
         

@@ -49,7 +49,6 @@ def masked_accuracy():
 
 #Idem top_k_accuracy mai sur les courps valides uniquement
 def masked_top_k_accuracy(k):
-    """Top-k accuracy sur coups valides uniquement : y_true = concat([one_hot, valid_mask])"""
     def metric(y_true, y_pred):
         one_hot = y_true[:, :1300]
         mask = y_true[:, 1300:]
@@ -67,9 +66,9 @@ class CNNPlayer_v6(Player):
     # Constructeur
     # dropout_rate:float : % de dropout pour les têtes
     # residual_dropout_rate:float : Taux de dropout pour les blocs résiduels
-    def __init__(self, dropout_rate:float=0.4, residual_dropout_rate:float=0.1):
+    def __init__(self, model_file:str=None, dropout_rate:float=0.4, residual_dropout_rate:float=0.1):
         super().__init__()
-        self.name = "CNNPlayer"
+        self.name = "CNNPlayerV6"
 
         #Paramètres du réseau
         self.n_filters = 128        
@@ -81,7 +80,11 @@ class CNNPlayer_v6(Player):
         self.with_ppo = False    
 
         #Construction du réseau
-        self.model = self._build_model()
+        if model_file:
+            self.model = tf.keras.models.load_model(model_file)
+        else:
+            self.model = self._build_model()
+
 
         # Garder des références aux différentes parties du réseau
         self._identify_heads()
@@ -158,9 +161,9 @@ class CNNPlayer_v6(Player):
         return exp_x / exp_x.sum()
 
     # Réalise une prédiction
-    # state:dict(5,5,10) ou (batch,5,5,10)
-    # Retourne : 
-    # policy_logits : (batch, 5, 5, 52) 
+    # state:(5,5,10) ou (batch,5,5,10)
+    # Retourne :
+    # policy_logits : (batch, 1300)
     # value : (batch, 1)
     def predict(self, state:dict):
         # Ajouter dimension batch si nécessaire
@@ -169,6 +172,7 @@ class CNNPlayer_v6(Player):
 
         return self._predict_compiled(tf.cast(state, tf.float32))
 
+    #Compile la fonction la première fois qu'elle est appelée, les appels suivant executent dctmt la version comppulée. Plus rapide surtout en inférence répétée
     @tf.function(input_signature=[tf.TensorSpec(shape=(None, 5, 5, 10), dtype=tf.float32)])
     def _predict_compiled(self, state):
         return self.model(state, training=False)
@@ -196,7 +200,7 @@ class CNNPlayer_v6(Player):
 
         print(f"Modèle compilé pour entraînement supervisé (policy seulement, label_smoothing={label_smoothing}, weight_decay={weight_decay}, use_mask={use_mask})")
     
-    #Compiler pour entraînement RL (tout entraînable)
+    #Compiler pour entraînement RL (nom de méthode à reprendre, pas vraiment compilation)
     def compile_for_rl(self):
 
         # Dégeler tout
@@ -416,7 +420,6 @@ class CNNPlayer_v6(Player):
         add = layers.Add(name=f'{name}_add')([bn2, x])
         output = layers.Activation('relu', name=f'{name}_relu2')(add)
 
-        # Dropout après l'addition (préserve le flux de gradient de la skip connection)
         if dropout_rate > 0.0:
             output = layers.Dropout(dropout_rate, name=f'{name}_dropout')(output)
 
@@ -424,7 +427,6 @@ class CNNPlayer_v6(Player):
     
     #Identifie les couches de chaque tête
     def _identify_heads(self):
-        """Identifie les layers de chaque tête"""
         self.policy_layers = []
         self.value_layers = []
         self.trunk_layers = []

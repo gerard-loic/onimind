@@ -22,9 +22,9 @@ class CNNPlayer_v4(Player):
 
     # Constructeur
     # dropout_rate:float : % de dropout
-    def __init__(self, dropout_rate:float=0.4):
+    def __init__(self, model_file:str=None, dropout_rate:float=0.4):
         super().__init__()
-        self.name = "CNNPlayer"
+        self.name = "CNNPlayerV4"
 
         #Paramètres du réseau
         self.n_filters = 128        
@@ -35,7 +35,10 @@ class CNNPlayer_v4(Player):
         self.with_ppo = False    
 
         #Construction du réseau
-        self.model = self._build_model()
+        if model_file:
+            self.model = tf.keras.models.load_model(model_file)
+        else:
+            self.model = self._build_model()
 
         # Garder des références aux différentes parties du réseau
         self._identify_heads()
@@ -58,7 +61,7 @@ class CNNPlayer_v4(Player):
             return None
 
         #On effectue la prédiction
-        policy_logits, value = self.predict(state, training=False)
+        policy_logits, value = self.predict(state)
         # value = float entre -1 (position perdue) et +1 (position gagnée)
         policy_logits = np.array(policy_logits).flatten()  # (1300,)
 
@@ -105,26 +108,26 @@ class CNNPlayer_v4(Player):
         else:
             return best_action
 
+    #Softmax stable numériquement (gère les -inf)
     def _softmax(self, x):
-        """Softmax stable numériquement (gère les -inf)"""
-        #Remplacer -inf par une très petite valeur pour éviter les NaN
         x_safe = np.where(x == -np.inf, -1e9, x)
         exp_x = np.exp(x_safe - np.max(x_safe))
         return exp_x / exp_x.sum()
 
     # Réalise une prédiction
-    # state:dict(5,5,10) ou (batch,5,5,10)
-    # training:bool : ????
-    # Retourne : 
-    # policy_logits : (batch, 5, 5, 52) 
+    # state:(5,5,10) ou (batch,5,5,10)
+    # Retourne :
+    # policy_logits : (batch, 1300)
     # value : (batch, 1)
-    def predict(self, state:dict, training:bool=False):
+    def predict(self, state:dict):
         # Ajouter dimension batch si nécessaire
         if len(state.shape) == 3:
             state = tf.expand_dims(state, 0)
 
         return self._predict_compiled(tf.cast(state, tf.float32))
 
+
+    #Compile la fonction la première fois qu'elle est appelée, les appels suivant executent dctmt la version comppulée. Plus rapide surtout en inférence répétée
     @tf.function(input_signature=[tf.TensorSpec(shape=(None, 5, 5, 10), dtype=tf.float32)])
     def _predict_compiled(self, state):
         return self.model(state, training=False)
@@ -138,7 +141,6 @@ class CNNPlayer_v4(Player):
         self.model.compile(
             optimizer=keras.optimizers.AdamW(learning_rate=learning_rate, weight_decay=weight_decay),
             loss=[
-                #Label smoothing réduit la confiance excessive du modèle (régularisation)
                 keras.losses.CategoricalCrossentropy(from_logits=True, label_smoothing=label_smoothing),  # Policy
                 None  # Pas de loss pour la valeur
             ],
@@ -150,7 +152,7 @@ class CNNPlayer_v4(Player):
 
         print(f"Modèle compilé pour entraînement supervisé (policy seulement, label_smoothing={label_smoothing}, weight_decay={weight_decay})")
     
-    #Compiler pour entraînement RL (tout entraînable)
+    #Compiler pour entraînement RL (nom de méthode à reprendre, pas vraiment compilation)
     def compile_for_rl(self, learning_rate=3e-4):
 
         # Dégeler tout
@@ -217,22 +219,14 @@ class CNNPlayer_v4(Player):
 
         #Tronc commun
         #Couche de convolution 2D
-        #L'entrée inputs est une grille (le plateau d'Onitama, 5×5)
-        #Chaque filtre 3×3 parcourt cette grille
-        #À chaque position, il calcule une somme pondérée des 9 valeurs voisines
-        #Cela produit une "feature map" qui capture des motifs locaux (positions de pièces adjacentes, menaces, etc.)
         x = layers.Conv2D(
             filters=self.n_filters,
             kernel_size=self.kernel_size,
-            padding='same', #Ajoute du padding pour que la sortie ait la même taille que l'entrée
+            padding='same',
             name='conv_input'
-        )(inputs)   #Applique la couche aux données
+        )(inputs)   
 
-        #Normalise les valeurs pour qu'elles aient une moyenne proche de 0 et un écart-type proche de 1
-        #Pourquoi ?
-        #Stabilise l'entraînement en évitant que les valeurs explosent ou s'effondrent au fil des couches
-        #Accélère la convergence : le réseau apprend plus vite car les gradients sont mieux calibrés
-        #Réduit légèrement l'overfitting
+        #Normalise les valeurs 
         x = layers.BatchNormalization(name='bn_input')(x)
         #Applique ReLU
         x = layers.Activation('relu', name='relu_input')(x)
@@ -242,16 +236,14 @@ class CNNPlayer_v4(Player):
             x = self._residual_block(x, name=f'res_block_{i}')
 
         #Tête de politique (Policy) => prévoit l'action à réaliser
-        #Un filtre 1×1 ne regarde qu'un seul pixel à la fois. Son rôle n'est pas de détecter des patterns spatiaux, mais de combiner les canaux (réduire/mélanger les features). C'est une sorte de "projection" dans un espace de dimension 32.
         policy = layers.Conv2D(
-            filters=32,     #On réduit la dimentionnalité
+            filters=32,     
             kernel_size=1,
             padding='same',
             name='policy_conv'
         )(x)
         policy = layers.BatchNormalization(name='policy_bn')(policy)
         policy = layers.Activation('relu', name='policy_relu')(policy)
-        #Dropout pour régularisation (évite l'overfitting)
         policy = layers.Dropout(self.dropout_rate, name='policy_dropout')(policy)
         #Dernière couche de la tête politique : produit les scores pour chaque action
         policy_logits = layers.Conv2D(
@@ -262,23 +254,22 @@ class CNNPlayer_v4(Player):
             #Le softmax sera appliqué plus tard pour convertir en probabilités
             name='policy_conv_out'
         )(policy)
-        #Aplatir pour la cross-entropy : (batch, 5, 5, 52) → (batch, 1300)
+        #Aplatir : (batch, 5, 5, 52) → (batch, 1300)
         policy_logits = layers.Reshape((5 * 5 * self.n_moves,), name='policy_logits')(policy_logits)
         #sortie: policy_logits → shape (batch, 1300)
 
         #Tête de valeur (estime si l'état est favorable ou non)
         value = layers.Conv2D(
-            filters=4,      #Valeur plus simple, donc moins de filtres
+            filters=4,    
             kernel_size=1,
             padding='same',
             name='value_conv'
         )(x)
         value = layers.BatchNormalization(name='value_bn')(value)
         value = layers.Activation('relu', name='value_relu')(value)
-        #Applatit le tenseur 3D en vecteur 1D
         value = layers.Flatten(name='value_flatten')(value)
-        #Dropout pour régularisation (évite l'overfitting)
         value = layers.Dropout(self.dropout_rate, name='value_dropout')(value)
+
         #Couche Fully connectée, sert à combiner toutes les informations spatiales pour évaluer la position globale
         value = layers.Dense(64, activation='relu', name='value_dense1')(value)
         #Sortie : 1 neurone, le score de la position, tanh me permet de borner la sortie entre -1 et 1
@@ -288,21 +279,13 @@ class CNNPlayer_v4(Player):
         model = keras.Model(
             inputs=inputs,
             outputs=[policy_logits, value_output],
-            name='OnitamaNetwork'
+            name='OnitamaNetwork-V4'
         )
         
         return model
         
 
     #Construction d'un bloc résiduel
-    #Le bloc résiduel vise à résoudre deux problèmes :
-    #Problème 1 : Vanishing Gradient
-    #Lors du backpropagation, le gradient se multiplie à chaque couche
-    #gradient × 0.9 × 0.9 × 0.9 × ... (20 fois) ≈ 0.12 (très petit !)
-    #Les premières couches n'apprennent presque plus
-    #Problème 2 : Dégradation
-    #Paradoxalement, ajouter plus de couches peut diminuer les performances
-    #Le réseau a du mal à apprendre même la fonction identité
     def _residual_block(self, x, name:str):
         # Branche principale
         conv1 = layers.Conv2D(
@@ -330,7 +313,6 @@ class CNNPlayer_v4(Player):
     
     #Identifie les couches de chaque tête
     def _identify_heads(self):
-        """Identifie les layers de chaque tête"""
         self.policy_layers = []
         self.value_layers = []
         self.trunk_layers = []

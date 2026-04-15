@@ -1,8 +1,6 @@
 from board import Board
 from constants import *
 import random
-import math
-import numpy as np
 from card import Card
 from heuristic import HeuristicEvaluation
 import sys
@@ -50,7 +48,6 @@ class ApiPlayer(Player):
                 return move
             
         raise InvalidMoveException()
-
 
 
 # Joueur "humain" (pour tester en mode console)
@@ -208,108 +205,4 @@ class LookAheadHeuristicPlayer(Player):
                 best_score = min(score, best_score)
 
         return best_score
-
-
-class MCTSNode:
-    def __init__(self, parent=None, action=None, depth=0):
-        self.parent = parent
-        self.action = action
-        self.depth = depth
-        self.children = []
-        self.visits = 0
-        self.wins = 0
-        self.untried_actions = None
-
-    def ucb1(self, exploration_constant=1.41):
-        if self.visits == 0:
-            return float('inf')
-        return (self.wins / self.visits) + exploration_constant * math.sqrt(math.log(self.parent.visits) / self.visits)
-
-    def best_child(self, exploration_constant=1.41):
-        return max(self.children, key=lambda c: c.ucb1(exploration_constant))
-
-    def best_action(self):
-        return max(self.children, key=lambda c: c.visits).action
-
-# Joueur implémentant la technique de Monte Carlo Tree Search
-class MCTSPlayer(Player):
-    def __init__(self, num_simulations:int=1000, exploration_constant:float=1.41):
-        super().__init__()
-        self.num_simulations = num_simulations
-        self.exploration_constant = exploration_constant
-        self.name = "MCTSPlayer"
-
-    def play(self, board:Board):
-        root = MCTSNode()
-        root.untried_actions = board.get_available_moves()
-
-        if len(root.untried_actions) == 0:
-            return None
-        
-        original_player = board.current_player
-
-        # On effectue N simulations
-        for _ in range(self.num_simulations):
-            node = root
-            moves_stack = []
-
-            # Selection : descendre dans l'arbre en choisissant le meilleur enfant
-            while node.untried_actions is not None and len(node.untried_actions) == 0 and len(node.children) > 0:
-                node = node.best_child(self.exploration_constant)
-                last_move = board.play_move(node.action)
-                moves_stack.append((False, last_move))
-
-            # Expansion : si le noeud a des actions non essayées, en choisir une
-            if node.untried_actions is not None and len(node.untried_actions) > 0:
-                action = random.choice(node.untried_actions)
-                node.untried_actions.remove(action)
-                last_move = board.play_move(action)
-                moves_stack.append((False, last_move))
-
-                child = MCTSNode(parent=node, action=action, depth=node.depth + 1)
-                child.untried_actions = board.get_available_moves()
-                node.children.append(child)
-                node = child
-
-            # Simulation : jouer aléatoirement jusqu'à la fin
-            game_ended, winner = board.game_has_ended()
-            while not game_ended:
-                available_moves = board.get_available_moves()
-                if available_moves:
-                    action = random.choice(available_moves)
-                    last_move = board.play_move(action)
-                    moves_stack.append((False, last_move))
-                else:
-                    last_move = board.play_default_move()
-                    moves_stack.append((True, last_move))
-                game_ended, winner = board.game_has_ended()
-
-            # Calculer le résultat
-            if winner == original_player:
-                result = 1
-            elif winner is None:
-                result = 0.5
-            else:
-                result = 0
-
-            # Backpropagation : remonter les résultats en alternant la perspective
-            # La perspective de départ dépend de la profondeur du nœud feuille :
-            # - profondeur impaire = original_player a joué pour atteindre ce nœud → current_result = result
-            # - profondeur paire = l'adversaire a joué pour atteindre ce nœud → current_result = 1 - result
-            current_result = result if node.depth % 2 == 1 else 1 - result
-            while node is not None:
-                node.visits += 1
-                node.wins += current_result
-                current_result = 1 - current_result
-                node = node.parent
-
-            # Annuler tous les coups joués
-            while moves_stack:
-                is_default, last_move = moves_stack.pop()
-                if is_default:
-                    board.cancel_default_move(last_move)
-                else:
-                    board.cancel_last_move(last_move)
-
-        return root.best_action()
 

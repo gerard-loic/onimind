@@ -54,9 +54,9 @@ class DensePlayer_v9(Player):
     # Constructeur
     # dropout_rate:float : % de dropout pour les têtes
     # trunk_dropout_rate:float : % de dropout entre les couches du tronc
-    def __init__(self, dropout_rate:float=0.4, trunk_dropout_rate:float=0.1):
+    def __init__(self, model_file:str=None, dropout_rate:float=0.4, trunk_dropout_rate:float=0.1):
         super().__init__()
-        self.name = "DensePlayer"
+        self.name = "DensePlayerV9"
 
         #Paramètres du réseau
         self.hidden_units = [512, 512, 256]
@@ -66,7 +66,10 @@ class DensePlayer_v9(Player):
         self.with_ppo = False 
 
         #Construction du réseau
-        self.model = self._build_model()
+        if model_file:
+            self.model = tf.keras.models.load_model(model_file)
+        else:
+            self.model = self._build_model()
 
         # Garder des références aux différentes parties du réseau
         self._identify_heads()
@@ -135,14 +138,14 @@ class DensePlayer_v9(Player):
         else:
             return best_action
 
+    #Softmax stable numériquement (gère les -inf)
     def _softmax(self, x):
-        """Softmax stable numériquement (gère les -inf)"""
         x_safe = np.where(x == -np.inf, -1e9, x)
         exp_x = np.exp(x_safe - np.max(x_safe))
         return exp_x / exp_x.sum()
 
     # Réalise une prédiction
-    # state:(5,5,10) ou (batch,5,5,10) — sera aplati en interne
+    # state:(5,5,10) ou (batch,5,5,10)
     # Retourne :
     # policy_logits : (batch, 1300)
     # value : (batch, 1)
@@ -153,6 +156,7 @@ class DensePlayer_v9(Player):
 
         return self._predict_compiled(tf.cast(state, tf.float32))
 
+    #Compile la fonction la première fois qu'elle est appelée, les appels suivant executent dctmt la version comppulée. Plus rapide surtout en inférence répétée
     @tf.function(input_signature=[tf.TensorSpec(shape=(None, 5, 5, 10), dtype=tf.float32)])
     def _predict_compiled(self, state):
         return self.model(state, training=False)
@@ -180,9 +184,7 @@ class DensePlayer_v9(Player):
 
         print(f"Modèle compilé pour entraînement supervisé (policy seulement, label_smoothing={label_smoothing}, weight_decay={weight_decay}, use_mask={use_mask})")
 
-    #Compiler pour entraînement RL (tout entraînable)
-    # rl_dropout_rate : dropout des têtes réduit pour RL (signal bruité → moins de régularisation)
-    # Le dropout du tronc (trunk_dropout_rate) reste inchangé
+    #Compiler pour entraînement RL (nom de méthode à reprendre, pas vraiment compilation)
     def compile_for_rl(self, learning_rate=3e-4, rl_dropout_rate=0.1):
         self.unfreeze_value_head()
         self.unfreeze_trunk()
@@ -264,8 +266,8 @@ class DensePlayer_v9(Player):
         x = layers.Flatten(name='trunk_flatten')(inputs)
 
         #Tronc commun : couches denses empilées
-        # LayerNorm à la place de BatchNorm : normalise par exemple (pas de running stats)
-        # → pas de décalage train/inférence quand batch_size=1 (MCTS)
+        #LayerNorm à la place de BatchNorm
+        #pas de décalage train/inférence
         for i, units in enumerate(self.hidden_units):
             x = layers.Dense(units, name=f'trunk_dense_{i}')(x)
             x = layers.LayerNormalization(name=f'trunk_ln_{i}')(x)

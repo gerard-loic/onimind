@@ -1,14 +1,12 @@
-from players import Player, LookAheadHeuristicPlayer
+from players import Player
 from board import Board
 import numpy as np
-from dl_players_v7 import DensePlayer_v7
-from dl_players_v6 import CNNPlayer_v6
-from dl_minimax import LookAheadDlPlayer
 
 
+#Noeud (état) de l'arbre des possibilités lors de la recherche MCTS
 class MCTSNode:
     def __init__(self, P:float, action=None):
-        self.P = P
+        self.P = P  #Prior donné par le réseau
         self.N = 0  #Visites
         self.Q = 0.0    #Valeur moyenne
         self.W = 0.0    #Total cumulé des Q
@@ -16,16 +14,15 @@ class MCTSNode:
         self.children = None
 
 class AlphaZeroPlayer(Player):
-    def __init__(self, dl_player:Player, num_simulations:int=100, c_puct:float=3, diagnose_winning_branches:bool=False, winning_q_threshold:float=-0.95):
+    def __init__(self, dl_player:Player, num_simulations:int=100, c_puct:float=3):
         self.name = "AlphaZeroPlayer"
         self.player = dl_player
         self.num_simulations = num_simulations
         self.c_puct = c_puct
-        self.diagnose_winning_branches = diagnose_winning_branches
-        self.winning_q_threshold = winning_q_threshold  # child.Q <= threshold => branche gagnante prouvée
         super().__init__()
 
     def play(self, board:Board):
+        #Racine
         tree = MCTSNode(P=0)
 
         #Premiere sim pour créée les enfants de la racine
@@ -49,10 +46,6 @@ class AlphaZeroPlayer(Player):
         #On choisit l'enfant le plus visité
         best_child = max(tree.children.values(), key=lambda c: c.N)
 
-        if self.diagnose_winning_branches:
-            pass
-            #self._diagnose_winning_branches(tree, best_child)
-
         #On retourne l'action
         return best_child.action
 
@@ -62,14 +55,15 @@ class AlphaZeroPlayer(Player):
         ended, winner = board.game_has_ended()
 
         if ended:
+            #Fin du jeu, l'exploration de l'arbre s'arrête là et on retourne 1 ou -1 en fonction du joueur courant
             value = 1.0 if winner == board.current_player else -1.0
-            node.N += 1
-            node.W += value
-            node.Q = node.W / node.N
+            node.N += 1 #Visite +1
+            node.W += value #Total des Q
+            node.Q = node.W / node.N    #MAJ valeur moyenne
             return value
         
         if node.children == None:
-            #Pas d'enfant -> expand -> predict -> créer les enfants
+            #Pas d'enfant, donc pas encore visité -> expand -> predict -> créer les enfants
             value = self._expand_node(parent_node=node, board=board)    #Value : P du nouveau noeud
             
             #backpropagation
@@ -77,6 +71,7 @@ class AlphaZeroPlayer(Player):
             node.W += value             #On ajoute la valeur au total
             node.Q = node.W / node.N    #On met à jour Q
 
+            #C'est un nouveau noeud donc on s'arrête là
             return value
         else:
             #Des enfants à visiter
@@ -85,7 +80,7 @@ class AlphaZeroPlayer(Player):
             best_child = None
             best_ucb = -np.inf
             for hash, children in node.children.items():
-                #Calcul de l'UCB
+                #Calcul de l'UCB pour chaque enfant
                 ucb = -children.Q + self.c_puct * children.P * np.sqrt(node.N) / (1 + children.N)
                 if ucb > best_ucb:
                     best_child = children
@@ -108,7 +103,7 @@ class AlphaZeroPlayer(Player):
             return value
             
     
-
+    #Pour un noeud pas encore visité
     def _expand_node(self, parent_node:MCTSNode, board:Board):
         
         #Etat courant
@@ -152,40 +147,6 @@ class AlphaZeroPlayer(Player):
         #on renvoie la valeur du noeud estimée par le réseau
         return float(value.numpy()[0][0])
     
-    def _diagnose_winning_branches(self, tree: MCTSNode, best_child: MCTSNode):
-        """Détecte si des branches gagnantes prouvées existent mais ne sont pas choisies."""
-        children = [c for c in tree.children.values() if c.N > 0]
-
-        # Log de diagnostic : Q min et distribution pour calibrer le seuil
-        if children:
-            q_values = sorted(c.Q for c in children)
-            best_by_n = max(children, key=lambda c: c.N)
-            min_q_child = min(children, key=lambda c: c.Q)
-            print(f"[DIAG] Q min={q_values[0]:.3f}(N={min_q_child.N}), max={q_values[-1]:.3f}, "
-                  f"n<-0.8={sum(1 for q in q_values if q < -0.8)}, "
-                  f"n<-0.95={sum(1 for q in q_values if q < -0.95)}, "
-                  f"total enfants visités={len(children)} | "
-                  f"choix: N={best_by_n.N} Q={best_by_n.Q:.3f} → {best_by_n.action}")
-
-        # child.Q <= threshold signifie que la position est très mauvaise pour l'adversaire = victoire prouvée
-        winning_branches = [c for c in children if c.Q <= self.winning_q_threshold]
-
-        if not winning_branches:
-            return
-
-        best_is_winning = best_child.Q <= self.winning_q_threshold
-        if best_is_winning:
-            return
-
-        print("\n[DIAG] Branches gagnantes prouvées ignorées !")
-        print(f"  Choix (N={best_child.N} Q={best_child.Q:.3f} P={best_child.P:.3f}) → {best_child.action}")
-        print(f"  Branches gagnantes (Q <= {self.winning_q_threshold}) :")
-        for c in sorted(winning_branches, key=lambda c: c.Q):
-            print(f"    N={c.N} Q={c.Q:.3f} P={c.P:.3f} → {c.action}")
-        print(f"  Tous les enfants (triés par N) :")
-        for c in sorted(children, key=lambda c: -c.N)[:10]:
-            marker = " <-- GAGNANT" if c.Q <= self.winning_q_threshold else ""
-            print(f"    N={c.N} Q={c.Q:.3f} P={c.P:.3f} → {c.action}{marker}")
 
     def _print_tree(self, node: MCTSNode, depth: int = 0, max_depth: int = 40):
         indent = "  " * depth

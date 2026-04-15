@@ -1,4 +1,7 @@
 .venv/
 __pycache__
 data/*
+models/compiled/*
+models/weights/*
+saved-models_old
 .env

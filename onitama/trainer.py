@@ -7,7 +7,7 @@ from pathlib import Path
 import pickle
 import numpy as np
 
-# Classe "parente" des data trainers
+# Classe "parente" des data trainers 
 class DataTrainer:
     def __init__(self):
         pass
@@ -17,37 +17,6 @@ class DataTrainer:
 
     def close(self, winner:Player):
         pass
-
-#Classe de gestion du buffer pour l'entraînement du réseau en self-play avec PPO
-class PPOBuffer(DataTrainer):
-    # gamma : facteur d'actualisation (proche de 1 = récompenses futures comptent beaucoup)
-    # lam   : facteur lambda pour GAE (0 = TD pur, haute variance ; 1 = Monte Carlo, haut biais)
-    def __init__(self, p1:Player, p2:Player, gamma:float=0.99, lam:float=0.95):
-        super().__init__()
-        self.p1 = p1
-        self.p2 = p2
-        self.gamma = gamma
-        self.lam = lam
-        self._clear()
-
-    def _clear(self):
-        #(5,5,10) état vu du joueur courant (ou input du réseau)
-        #int : index flat de l'action (savoir quelle action évaluer)
-        # P(action|state) au moment de la collecte (utilisé pour calculer le ration PPO)
-         #V(s) estimé par le réseau (utilisé pour calculer GAE)
-        self.p1_states, self.p1_actions, self.p1_log_probs, self.p1_values, self.p1_masks = [], [], [], [], []
-        self.p2_states, self.p2_actions, self.p2_log_probs, self.p2_values, self.p2_masks = [], [], [], [], []
-
-        self._traj_start_p1 = 0 #Pointeur du début de la trajectoire en cours (partie)
-        self._traj_start_p2 = 0 #Pointeur du début de la trajectoire en cours (partie)
-
-        #Listes fusionnées (p1 + p2, remplies dans close)
-        self.states = []
-        self.actions = []
-        self.log_probs = []
-        self.masks = []
-        self.advantages = [] # float - calculé dans close() (utilisé pour loss policy PPO)
-        self.returns = [] #float - calculé dans close() (cible pour la value head)
 
 
     # Enregistre une expérience, c'est à dire un couple état / action (met en cache)
@@ -380,16 +349,3 @@ if __name__ == "__main__":
 
     
     
-
-
-    """
-    
-
-    all = RegularDataTrainer.getTrainedData(filepath="../data/training-data-heuristic-vs-laheuristic3-actions.pkl")
-    print(len(all))
-
-
-    all2 = RegularDataTrainer.getTrainedData(filepath="../data/training-data-heuristic-vs-laheuristic2-actions.pkl")
-    print(len(all2))
-    print(all2[1])
-    """

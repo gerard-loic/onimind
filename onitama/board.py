@@ -328,7 +328,7 @@ class Board:
         return res_str
 
     def __repr__(self):
-        # Hash léger : grille (25 octets) + cartes + joueurs — sans numpy
+        # Hash de l'état (utile pour AlphaZero)
         board_bytes = bytes(cell for col in self.board for cell in col)
         meta = bytes([
             self.current_player,

@@ -1,11 +1,10 @@
 from board import Board
 from constants import *
-import random
 
 class HeuristicEvaluation:
 
     
-    # Retourne une évaluation heuristique de l'état
+    # Retourne une évaluation heuristique de l'état sur une base "équilibrée"
     def heuristic_regular(board:Board, from_current_player_point_of_view:bool=True, verbose:bool=False):
         ctx = HeuristicEvaluation._get_evaluation_context(board, from_current_player_point_of_view)
 
@@ -288,23 +287,6 @@ class HeuristicEvaluation:
 
         return score
     
-
-    # Heuristique avec bruit aléatoire pour générer des parties variées.
-    # Utile pour créer des données d'entraînement diversifiées.
-    def heuristic_noisy(board:Board, from_current_player_point_of_view:bool=True, noise_factor:float=0.15, verbose:bool=False):
-        base_score = HeuristicEvaluation.heuristic_regular(board, from_current_player_point_of_view, verbose=False)
-
-        # Ajouter du bruit proportionnel au score (évite le bruit sur les positions gagnantes/perdantes)
-        if abs(base_score) < 900:  # Pas de bruit sur victoire/défaite
-            noise = random.gauss(0, abs(base_score) * noise_factor + 20)
-            score = base_score + noise
-        else:
-            score = base_score
-
-        if verbose:
-            print(f"[Noisy] Base: {base_score}, Final: {score}")
-
-        return score
 
     #Méthodes "helpers"
     #------------------------------------------------------------------------------------------------------------------------------------

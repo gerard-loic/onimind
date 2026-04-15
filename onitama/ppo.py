@@ -1,10 +1,41 @@
 from players import Player
-from dl_players_v2 import CNNPlayer_v2
 import tensorflow as tf
-from trainer import PPOBuffer
 from game import Game
 import numpy as np
 from tqdm import tqdm
+from trainer import DataTrainer
+
+
+#Classe de gestion du buffer pour l'entraînement du réseau en self-play avec PPO
+class PPOBuffer(DataTrainer):
+    # gamma : facteur d'actualisation (proche de 1 = récompenses futures comptent beaucoup)
+    # lam   : facteur lambda pour GAE (0 = TD pur, haute variance ; 1 = Monte Carlo, haut biais)
+    def __init__(self, p1:Player, p2:Player, gamma:float=0.99, lam:float=0.95):
+        super().__init__()
+        self.p1 = p1
+        self.p2 = p2
+        self.gamma = gamma
+        self.lam = lam
+        self._clear()
+
+    def _clear(self):
+        #(5,5,10) état vu du joueur courant (ou input du réseau)
+        #int : index flat de l'action (savoir quelle action évaluer)
+        # P(action|state) au moment de la collecte (utilisé pour calculer le ration PPO)
+         #V(s) estimé par le réseau (utilisé pour calculer GAE)
+        self.p1_states, self.p1_actions, self.p1_log_probs, self.p1_values, self.p1_masks = [], [], [], [], []
+        self.p2_states, self.p2_actions, self.p2_log_probs, self.p2_values, self.p2_masks = [], [], [], [], []
+
+        self._traj_start_p1 = 0 #Pointeur du début de la trajectoire en cours (partie)
+        self._traj_start_p2 = 0 #Pointeur du début de la trajectoire en cours (partie)
+
+        #Listes fusionnées (p1 + p2, remplies dans close)
+        self.states = []
+        self.actions = []
+        self.log_probs = []
+        self.masks = []
+        self.advantages = [] # float - calculé dans close() (utilisé pour loss policy PPO)
+        self.returns = [] #float - calculé dans close() (cible pour la value head)
 
 class PPOTrainer:
     def __init__(
@@ -18,8 +49,8 @@ class PPOTrainer:
             clip_epsilon:float = 0.2, #Borne du cli^pping PPO
             value_coef:float = 0.5, #Poids de la value loss dans la loss totale
             entropy_coef:float = 0.03, #Poids du bonus d'entropie (exploration)
-            gamma: float = 0.99,
-            lam:float = 0.85,
+            gamma: float = 0.99, #Facteur d'actualisation (pondère l'importance des récompenses futures par rapport aux récompenses immédiates)
+            lam:float = 0.85, #Controle du compromis biais/variance dan l'estimation de l'avantage GAE'
             alternative_players:list = [],   #Joueurs alternatifs utilisés dans le self play
             alternative_players_ratio:list = [], #Ratio d'utilisation des joueurs alternatifs
             past_self:Player = None,          #Ancienne version de player1 (version gelée, mise à jour toutes les N itérations)
@@ -50,12 +81,79 @@ class PPOTrainer:
         self.losses = 0
         self.draws = 0
 
+    #Boucle principale
+    def train(self,
+              n_iterations:int,
+              save_every:int=50,
+              save_path:str=None,
+              on_iteration_end=None):
+
+        self.player1.setPPOTraining(True)
+        self.player2.setPPOTraining(True)
+        self.player1.compile_for_rl()
+        self.player2.compile_for_rl()
+
+        # Initialisation de past_self avec les poids courants de player1 (version antérieure du réseau)
+        if self.past_self is not None and self.past_self_ratio > 0:
+            self.past_self.setPPOTraining(True)
+            self.past_self.model.set_weights(self.player1.model.get_weights())
+            print(f"past_self initialisé (mis à jour toutes les {self.past_self_update_every} itérations)")
+
+        history = {
+            'policy_loss': [],
+            'value_loss': [],
+            'entropy': [],
+            'wins': [],
+            'losses': [],
+            'draws': [],
+            'transitions': []
+        }
+
+        for i in range(n_iterations):
+            #On joue les parties
+            data = self._collect()
+
+            #On fait l'apprentissage
+            metrics = self._update(data)
+
+            #On ajoute aux métriques pour suivre
+            history['policy_loss'].append(metrics['policy_loss'])
+            history['value_loss'].append(metrics['value_loss'])
+            history['entropy'].append(metrics['entropy'])
+            history['wins'].append(self.wins)
+            history['losses'].append(self.losses)
+            history['draws'].append(self.draws)
+            history['transitions'].append(len(data['states']))
+
+            print(f"[{i+1:4d}/{n_iterations}] "
+                  f"transitions={len(data['states'])} | "
+                  f"W/L/D={self.wins}/{self.losses}/{self.draws} | "
+                  f"p_loss={metrics['policy_loss']:.4f} | "
+                  f"v_loss={metrics['value_loss']:.4f} | "
+                  f"entropy={metrics['entropy']:.4f}")
+
+            # Mise à jour périodique de past_self
+            if self.past_self is not None and self.past_self_ratio > 0 and (i + 1) % self.past_self_update_every == 0:
+                self.past_self.model.set_weights(self.player1.model.get_weights())
+                print(f"past_self mis à jour (iter {i+1})")
+
+            #Sauvegarde régulière
+            if save_path and (i + 1) % save_every == 0:
+                self.player1.save_weights(f"{save_path}_iter{i+1}.weights.h5")
+                print(f"Sauvegardé : {save_path}_iter{i+1}.weights.h5")
+
+            if on_iteration_end is not None:
+                on_iteration_end(i + 1, metrics, history)
+
+        return history
+
     #Collecte: joue n_games parties et remplit le buffer
     def _collect(self)->dict:
         p1 = self.player1
         p2 = self.player2
         p2.model = p1.model  #Self-play live : p2 partage les poids courants de p1
 
+        #Buffer utilisé pour stocker les trajectoires
         buffer = PPOBuffer(p1=p1, p2=p2, gamma=self.gamma, lam=self.lam)
         self.wins = self.losses = self.draws = 0
 
@@ -79,6 +177,7 @@ class PPOTrainer:
         seuils.append(self.n_games)
         players.append(p2)
 
+        # Jour n_games 
         for i in tqdm(range(self.n_games), desc="self-play"):
             for j, seuil in enumerate(seuils):
                 if i < seuil:
@@ -176,93 +275,4 @@ class PPOTrainer:
             'entropy' : np.mean(entropies)
         }
     
-    #Boucle principale
-    def train(self,
-              n_iterations:int,
-              save_every:int=50,
-              save_path:str=None,
-              on_iteration_end=None):
-
-        self.player1.setPPOTraining(True)
-        self.player2.setPPOTraining(True)
-        self.player1.compile_for_rl()
-        self.player2.compile_for_rl()
-
-        # Initialisation de past_self avec les poids courants de player1
-        if self.past_self is not None and self.past_self_ratio > 0:
-            self.past_self.setPPOTraining(True)
-            self.past_self.model.set_weights(self.player1.model.get_weights())
-            print(f"  → past_self initialisé (mis à jour toutes les {self.past_self_update_every} itérations)")
-
-        history = {
-            'policy_loss': [],
-            'value_loss': [],
-            'entropy': [],
-            'wins': [],
-            'losses': [],
-            'draws': [],
-            'transitions': []
-        }
-
-        for i in range(n_iterations):
-            data = self._collect()
-            metrics = self._update(data)
-
-            history['policy_loss'].append(metrics['policy_loss'])
-            history['value_loss'].append(metrics['value_loss'])
-            history['entropy'].append(metrics['entropy'])
-            history['wins'].append(self.wins)
-            history['losses'].append(self.losses)
-            history['draws'].append(self.draws)
-            history['transitions'].append(len(data['states']))
-
-            print(f"[{i+1:4d}/{n_iterations}] "
-                  f"transitions={len(data['states'])} | "
-                  f"W/L/D={self.wins}/{self.losses}/{self.draws} | "
-                  f"p_loss={metrics['policy_loss']:.4f} | "
-                  f"v_loss={metrics['value_loss']:.4f} | "
-                  f"entropy={metrics['entropy']:.4f}")
-
-            # Mise à jour périodique de past_self
-            if self.past_self is not None and self.past_self_ratio > 0 and (i + 1) % self.past_self_update_every == 0:
-                self.past_self.model.set_weights(self.player1.model.get_weights())
-                print(f"  → past_self mis à jour (iter {i+1})")
-
-            if save_path and (i + 1) % save_every == 0:
-                self.player1.save_weights(f"{save_path}_iter{i+1}.weights.h5")
-                print(f"  → Sauvegardé : {save_path}_iter{i+1}.weights.h5")
-
-            if on_iteration_end is not None:
-                on_iteration_end(i + 1, metrics, history)
-
-        return history
-
-
-if __name__ == "__main__":
-    p1 = CNNPlayer_v2()
-    p1.load_weights('../saved-models/CNNPlayer-v1-withdropout-datalarge-dropout-weights.weights.h5')
-    p2 = CNNPlayer_v2()
-
-    trainer = PPOTrainer(
-        player1=p1,
-        player2=p2,
-        n_games=64,          # parties par itération
-        n_epochs=4,          # passes sur les données collectées
-        minibatch_size=64,
-        learning_rate=3e-4,
-        clip_epsilon=0.2,
-        value_coef=0.5,
-        entropy_coef=0.03,
-        gamma=0.99,
-        lam=0.95
-    )
-
-    #trainer.train(n_iterations=3, save_every=10, save_path=None)
-
-    trainer.train(
-        n_iterations=10,
-        save_every=10,
-        save_path='../saved-models/ppo-v2'
-    )
-
-
+    

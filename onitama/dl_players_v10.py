@@ -40,7 +40,6 @@ def masked_accuracy():
 
 #Idem top_k_accuracy mai sur les courps valides uniquement
 def masked_top_k_accuracy(k):
-    """Top-k accuracy sur coups valides uniquement : y_true = concat([one_hot, valid_mask])"""
     def metric(y_true, y_pred):
         one_hot = y_true[:, :1300]
         mask = y_true[:, 1300:]
@@ -53,9 +52,9 @@ def masked_top_k_accuracy(k):
 # Architecture sur réseau dense, sans LayerNormalization, sans Dropout, allégée avec skip connection 
 class DensePlayer_v10(Player):
     # Constructeur
-    def __init__(self):
+    def __init__(self, model_file:str=None):
         super().__init__()
-        self.name = "DensePlayer-v10"
+        self.name = "DensePlayerV10"
 
         #Paramètres du réseau
         self.hidden_units = [128, 128, 64]
@@ -63,7 +62,10 @@ class DensePlayer_v10(Player):
         self.with_ppo = False
 
         #Construction du réseau
-        self.model = self._build_model()
+        if model_file:
+            self.model = tf.keras.models.load_model(model_file)
+        else:
+            self.model = self._build_model()
 
         # Garder des références aux différentes parties du réseau
         self._identify_heads()

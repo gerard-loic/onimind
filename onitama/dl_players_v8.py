@@ -62,9 +62,9 @@ class CNNPlayer_v8(Player):
     # Constructeur
     # dropout_rate:float : % de dropout pour les tetes
     # residual_dropout_rate:float : % de dropout sur les blocs résiduels
-    def __init__(self, dropout_rate:float=0.4, residual_dropout_rate:float=0.1):
+    def __init__(self, model_file:str=None, dropout_rate:float=0.4, residual_dropout_rate:float=0.1):
         super().__init__()
-        self.name = "CNNPlayer"
+        self.name = "CNNPlayerV8"
 
         #Paramètres du réseau
         self.n_filters = 128        
@@ -76,7 +76,10 @@ class CNNPlayer_v8(Player):
         self.with_ppo = False   
 
         #Construction du réseau
-        self.model = self._build_model()
+        if model_file:
+            self.model = tf.keras.models.load_model(model_file)
+        else:
+            self.model = self._build_model()
 
         # Garder des références aux différentes parties du réseau
         self._identify_heads()
@@ -98,7 +101,7 @@ class CNNPlayer_v8(Player):
             return None
 
         #On effectue la prédiction
-        policy_logits, value = self.predict(state, training=False)
+        policy_logits, value = self.predict(state)
         # value = float entre -1 (position perdue) et +1 (position gagnée)
         policy_logits = np.array(policy_logits).flatten()  # (1300,)
 
@@ -145,26 +148,25 @@ class CNNPlayer_v8(Player):
         else:
             return best_action
 
+    #Softmax stable numériquement (gère les -inf)
     def _softmax(self, x):
-        """Softmax stable numériquement (gère les -inf)"""
-        #Remplacer -inf par une très petite valeur pour éviter les NaN
         x_safe = np.where(x == -np.inf, -1e9, x)
         exp_x = np.exp(x_safe - np.max(x_safe))
         return exp_x / exp_x.sum()
 
     # Réalise une prédiction
-    # state:dict(5,5,10) ou (batch,5,5,10)
-    # training:bool : ????
-    # Retourne : 
-    # policy_logits : (batch, 5, 5, 52) 
+    # state:(5,5,10) ou (batch,5,5,10)
+    # Retourne :
+    # policy_logits : (batch, 1300)
     # value : (batch, 1)
-    def predict(self, state:dict, training:bool=False):
+    def predict(self, state:dict):
         # Ajouter dimension batch si nécessaire
         if len(state.shape) == 3:
             state = tf.expand_dims(state, 0)
 
         return self._predict_compiled(tf.cast(state, tf.float32))
 
+    #Compile la fonction la première fois qu'elle est appelée, les appels suivant executent dctmt la version comppulée. Plus rapide surtout en inférence répétée
     @tf.function(input_signature=[tf.TensorSpec(shape=(None, 5, 5, 10), dtype=tf.float32)])
     def _predict_compiled(self, state):
         return self.model(state, training=False)
@@ -192,7 +194,7 @@ class CNNPlayer_v8(Player):
 
         print(f"Modèle compilé pour entraînement supervisé (policy seulement, label_smoothing={label_smoothing}, weight_decay={weight_decay}, use_mask={use_mask})")
     
-    #Compiler pour entraînement RL (tout entraînable)
+    #Compiler pour entraînement RL (nom de méthode à reprendre, pas vraiment compilation)
     def compile_for_rl(self, learning_rate=3e-4):
 
         # Dégeler tout
@@ -211,62 +213,8 @@ class CNNPlayer_v8(Player):
         self.model.save(filepath)
     
     #Charge les poids
-    # skip_layers : liste de noms de couches à ignorer (garder leur init aléatoire)
-    # Utile pour charger des poids d'une architecture antérieure sans certaines couches (ex: value_adapter).
-    # Le fichier .weights.h5 groupe les couches par type (conv2d_0..N, batch_normalization_0..N...).
-    # On mappe chaque couche du modèle vers la couche correspondante du fichier selon son type et sa position.
-    def load_weights(self, filepath, skip_layers=None):
-        if skip_layers is None:
-            self.model.load_weights(filepath)
-            return
-
-        import h5py
-        from tensorflow.keras import layers as klayers
-
-        # Correspondance entre classe Keras et préfixe dans le fichier HDF5
-        TYPE_MAP = {
-            klayers.Conv2D: 'conv2d',
-            klayers.BatchNormalization: 'batch_normalization',
-            klayers.Dense: 'dense',
-        }
-
-        with h5py.File(filepath, 'r') as f:
-            # Pour chaque type, liste les clés du fichier triées par indice numérique
-            def get_file_keys_by_type(prefix):
-                keys = [k for k in f['layers'].keys()
-                        if k == prefix or k.startswith(prefix + '_')]
-                return sorted(keys, key=lambda k: int(k[len(prefix)+1:]) if '_' in k[len(prefix):] else 0)
-
-            file_keys_by_type = {prefix: get_file_keys_by_type(prefix) for prefix in TYPE_MAP.values()}
-            # Compteur : combien de couches de chaque type ont déjà été assignées dans le fichier
-            file_counters = {prefix: 0 for prefix in TYPE_MAP.values()}
-
-            for layer in self.model.layers:
-                if not layer.get_weights():
-                    continue
-                layer_type = type(layer)
-                if layer_type not in TYPE_MAP:
-                    print(f"Type inconnu ignoré : '{layer.name}' ({layer_type.__name__})")
-                    continue
-                prefix = TYPE_MAP[layer_type]
-
-                if layer.name in skip_layers:
-                    continue  # couche nouvelle absente du fichier : ne pas avancer le compteur
-
-                idx = file_counters[prefix]
-                keys = file_keys_by_type[prefix]
-                if idx >= len(keys):
-                    print(f"Attention : plus de '{prefix}' dans le fichier pour '{layer.name}'")
-                    continue
-                key = keys[idx]
-                var_keys = sorted(f[f'layers/{key}/vars'].keys(), key=lambda x: int(x))
-                weights = [f[f'layers/{key}/vars/{v}'][()] for v in var_keys]
-                try:
-                    layer.set_weights(weights)
-                    file_counters[prefix] += 1
-                except ValueError:
-                    print(f"Forme incompatible pour '{layer.name}' (ignoré)")
-                    file_counters[prefix] += 1
+    def load_weights(self, filepath, **kwargs):
+        self.model.load_weights(filepath, **kwargs)
     
     #Sauvegarde les poids (uniquement les poids)
     def save_weights(self, filepath):
@@ -313,23 +261,16 @@ class CNNPlayer_v8(Player):
 
         #Tronc commun
         #Couche de convolution 2D
-        #L'entrée inputs est une grille (le plateau d'Onitama, 5×5)
-        #Chaque filtre 3×3 parcourt cette grille
-        #À chaque position, il calcule une somme pondérée des 9 valeurs voisines
-        #Cela produit une "feature map" qui capture des motifs locaux (positions de pièces adjacentes, menaces, etc.)
         x = layers.Conv2D(
             filters=self.n_filters,
             kernel_size=self.kernel_size,
-            padding='same', #Ajoute du padding pour que la sortie ait la même taille que l'entrée
+            padding='same', 
             name='conv_input'
-        )(inputs)   #Applique la couche aux données
+        )(inputs)  
 
-        #Normalise les valeurs pour qu'elles aient une moyenne proche de 0 et un écart-type proche de 1
-        #Pourquoi ?
-        #Stabilise l'entraînement en évitant que les valeurs explosent ou s'effondrent au fil des couches
-        #Accélère la convergence : le réseau apprend plus vite car les gradients sont mieux calibrés
-        #Réduit légèrement l'overfitting
+        #Normalise les valeurs
         x = layers.BatchNormalization(name='bn_input')(x)
+
         #Applique ReLU
         x = layers.Activation('relu', name='relu_input')(x)
 
@@ -338,9 +279,7 @@ class CNNPlayer_v8(Player):
             x = self._residual_block(x, name=f'res_block_{i}', dropout_rate=self.residual_dropout_rate)
 
         #Tête de politique (Policy) => prévoit l'action à réaliser
-
         # Couche intermédiaire : combine les canaux du tronc (128 → 64)
-        # BatchNorm + Dropout pour régularisation (évite l'overfitting)
         policy = layers.Conv2D(
             filters=64,
             kernel_size=1,
@@ -353,21 +292,19 @@ class CNNPlayer_v8(Player):
 
         #Dernière couche de la tête politique : produit les scores pour chaque action
         policy_logits = layers.Conv2D(
-            filters=self.n_moves,   #Un filtre par mouvement possible (les déplacements des cartes)
+            filters=self.n_moves,   
             kernel_size=1,
             padding='same',
             activation=None,    #Pas d'activation, on garde les valeurs brutes
             #Le softmax sera appliqué plus tard pour convertir en probabilités
             name='policy_conv_out'
         )(policy)
-        #Aplatir pour la cross-entropy : (batch, 5, 5, 52) → (batch, 1300)
+
+        #Aplatir : (batch, 5, 5, 52) → (batch, 1300)
         policy_logits = layers.Reshape((5 * 5 * self.n_moves,), name='policy_logits')(policy_logits)
         #sortie: policy_logits → shape (batch, 1300)
 
         #Tête de valeur (estime si l'état est favorable ou non)
-        # Adaptateur value : traitement spatial dédié à partir des features du tronc gelé.
-        # Ces couches sont entraînées from scratch (absentes des anciens fichiers de poids →
-        # ignorées par load_weights(by_name=True, skip_mismatch=True)).
         value = layers.Conv2D(
             filters=64,
             kernel_size=3,
@@ -378,16 +315,15 @@ class CNNPlayer_v8(Player):
         value = layers.Activation('relu', name='value_adapter_relu')(value)
 
         value = layers.Conv2D(
-            filters=16,      #Valeur plus simple, donc moins de filtres
+            filters=16,      
             kernel_size=1,
             padding='same',
             name='value_conv'
         )(value)
         value = layers.BatchNormalization(name='value_bn')(value)
         value = layers.Activation('relu', name='value_relu')(value)
-        #Applatit le tenseur 3D en vecteur 1D
         value = layers.Flatten(name='value_flatten')(value)
-        #Dropout pour régularisation (évite l'overfitting)
+        #évite l'overfitting
         value = layers.Dropout(self.dropout_rate, name='value_dropout')(value)
         #Couche Fully connectée, sert à combiner toutes les informations spatiales pour évaluer la position globale
         value = layers.Dense(128, activation='relu', name='value_dense1')(value)
@@ -398,21 +334,13 @@ class CNNPlayer_v8(Player):
         model = keras.Model(
             inputs=inputs,
             outputs=[policy_logits, value_output],
-            name='OnitamaNetwork-v6'
+            name='OnitamaNetwork-v8'
         )
         
         return model
         
 
     #Construction d'un bloc résiduel
-    #Le bloc résiduel vise à résoudre deux problèmes :
-    #Problème 1 : Vanishing Gradient
-    #Lors du backpropagation, le gradient se multiplie à chaque couche
-    #gradient × 0.9 × 0.9 × 0.9 × ... (20 fois) ≈ 0.12 (très petit !)
-    #Les premières couches n'apprennent presque plus
-    #Problème 2 : Dégradation
-    #Paradoxalement, ajouter plus de couches peut diminuer les performances
-    #Le réseau a du mal à apprendre même la fonction identité
     def _residual_block(self, x, name:str, dropout_rate:float=0.0):
         # Branche principale
         conv1 = layers.Conv2D(
@@ -436,7 +364,6 @@ class CNNPlayer_v8(Player):
         add = layers.Add(name=f'{name}_add')([bn2, x])
         output = layers.Activation('relu', name=f'{name}_relu2')(add)
 
-        # Dropout après l'addition (préserve le flux de gradient de la skip connection)
         if dropout_rate > 0.0:
             output = layers.Dropout(dropout_rate, name=f'{name}_dropout')(output)
 
@@ -444,7 +371,6 @@ class CNNPlayer_v8(Player):
     
     #Identifie les couches de chaque tête
     def _identify_heads(self):
-        """Identifie les layers de chaque tête"""
         self.policy_layers = []
         self.value_layers = []
         self.trunk_layers = []
