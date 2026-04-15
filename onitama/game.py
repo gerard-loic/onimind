@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 
 from board import Board
 from card import Card
-from players import Player, RandomPlayer, HumanPlayer, HeuristicPlayer, LookAheadHeuristicPlayer, MCTSPlayer
+from players import Player, RandomPlayer, HumanPlayer, HeuristicPlayer, LookAheadHeuristicPlayer
 from dl_players_v2 import CNNPlayer_v2
 from dl_players_v1 import CNNPlayer_v1
 from dl_players_v3 import CNNPlayer_v3

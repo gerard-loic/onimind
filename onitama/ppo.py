@@ -37,6 +37,129 @@ class PPOBuffer(DataTrainer):
         self.advantages = [] # float - calculé dans close() (utilisé pour loss policy PPO)
         self.returns = [] #float - calculé dans close() (cible pour la value head)
 
+    # Enregistre une expérience, c'est à dire un couple état / action (met en cache)
+    # player:Player : joueur
+    # state:list[5:5:10] : Etat (Matrice de 5x5x10)
+    # action:list(rel_x:int, rel_y:int, move_idx:int) : Action
+    # probability:float : Probabilité de l'action sous la politique courante
+    # value:float : Estimation de V(s)
+    def save_experience(self, player:Player, state:list, action:list, log_prob:float, value:float, valid_mask=None):
+        #Joueur non-réseau (heuristique) : pas de log_prob ni value, on n'enregistre pas
+        if log_prob is None:
+            return
+
+        #Transposition
+        state_t = np.transpose(np.array(state), (1, 2, 0))
+
+        col, row = action.from_pos
+        flat_idx = col * 260 + row * 52 + action.move_idx
+
+        if player == self.p1:
+            self.p1_states.append(state_t)
+            self.p1_actions.append(flat_idx)
+            self.p1_log_probs.append(log_prob)
+            self.p1_values.append(value)
+            self.p1_masks.append(valid_mask)
+        else:
+            self.p2_states.append(state_t)
+            self.p2_actions.append(flat_idx)
+            self.p2_log_probs.append(log_prob)
+            self.p2_values.append(value)
+            self.p2_masks.append(valid_mask)
+
+    # Termine la trajectoire et calcule GAE
+    def close(self, winner):
+        #Score en fonction du gagnant
+        if winner == self.p1:
+            p1_reward, p2_reward = 1.0, -1.0
+        elif winner == self.p2:
+            p1_reward, p2_reward = -1.0, 1.0
+        else:
+            # Joueur alternatif (heuristique) a gagné : p1 a perdu, p2 (CNN) n'a pas d'expériences
+            p1_reward, p2_reward = -1.0, 0.0
+
+        #Calcul GAE pour p1 et p2
+        adv_p1, ret_p1 = self._compute_gae(self.p1_values, self._traj_start_p1, p1_reward)
+        adv_p2, ret_p2 = self._compute_gae(self.p2_values, self._traj_start_p2, p2_reward)
+
+        #Fusion dans les listes finales
+        self.states.extend(self.p1_states[self._traj_start_p1:])
+        self.states.extend(self.p2_states[self._traj_start_p2:])
+        self.actions.extend(self.p1_actions[self._traj_start_p1:])
+        self.actions.extend(self.p2_actions[self._traj_start_p2:])
+        self.log_probs.extend(self.p1_log_probs[self._traj_start_p1:])
+        self.log_probs.extend(self.p2_log_probs[self._traj_start_p2:])
+        self.masks.extend(self.p1_masks[self._traj_start_p1:])
+        self.masks.extend(self.p2_masks[self._traj_start_p2:])
+        self.advantages.extend(adv_p1.tolist())
+        self.advantages.extend(adv_p2.tolist())
+        self.returns.extend(ret_p1.tolist())
+        self.returns.extend(ret_p2.tolist())
+
+        #Avancer les pointeurs
+        self._traj_start_p1 = len(self.p1_states)
+        self._traj_start_p2 = len(self.p2_states)
+
+    def _compute_gae(self, values_list, traj_start, winner_reward):
+        #On récupère les valeurs de la trajectoire, càd la partie en cours
+        values = np.array(values_list[traj_start:], dtype=np.float32)
+
+        #Joueur heuristique : aucune expérience enregistrée, on retourne des tableaux vides
+        if len(values) == 0:
+            empty = np.array([], dtype=np.float32)
+            return empty, empty
+
+        #0 à chaque pas, winner_reward uniquement au dernier
+        rewards = np.zeros(len(values), dtype=np.float32)
+        rewards[-1] = winner_reward
+
+        #Calcul de delta_T : V(s_{T+1}) = last_value (on ajoute une valeur pour que le calcul à T+1 soit toujours juste)
+        values_ext = np.append(values, 0.0)
+
+        #GAE
+        # delta_t = r_t + gamma * V(s_{t+1}) - V(s_t)   ← erreur TD
+        # A_t     = delta_t + (gamma * lam) * A_{t+1}   ← avantage lissé
+        advantages = np.zeros(len(rewards), dtype=np.float32)
+        gae = 0.0
+        #Etape 1 : on remonte le temps depuis le dernier coup de la partie vers le premier
+        for t in reversed(range(len(rewards))):
+            #On calcule la différence entre ce que le réseau estimait et ce qu'on obtenu.
+            #On a donc un delta positif quand le réseau était trop optimiste, négatif quand il était pessimiste
+            #Gamma pondère combien on fait confiance à la valeur du prochain état pour estimer si le coup était bon
+            # C'est à dire ici le delta c'est la récompense immédiate + la veleur future pondérée par gamma - ce que le réseau pensait comme valeur pour cet état
+            # Concrètement, plus une victoire est lointaine (donc le gain lointain, plus la pondération est faible)
+            delta = rewards[t] + self.gamma * values_ext[t+1] - values_ext[t]
+
+            #On calcule l'avantage cumulé, recalculé pour chaque t
+            #Donc à t=0 : somme pondérée de toutes les erreurs TD (temporal difference) futures avec un poids qui décroit exponentiellement
+            #Temporal diffrence : idée fondamentale : estimer la valeur d'un état en se basant sur l'état suivant sans attendre la fin de la partir
+            #C'est le rôle de lam (TD pur lam=0, MonteCarlo lam=1, GAE  lam=0.96 c'est une interpolation entre TD et MOnteCarlo)
+            gae = delta + self.gamma * self.lam * gae
+            advantages[t] = gae
+
+        return advantages, advantages + values  # (advantages, returns)
+
+    # Retourne les données sous forme de tensors et vide le buffer
+    def get(self) -> dict:
+        data = {
+            'states' : np.array(self.states, dtype=np.float32), #(N, 5, 5, 10)
+            'actions' : np.array(self.actions, dtype=np.int32),
+            'log_probs' : np.array(self.log_probs, dtype=np.float32),
+            'masks' : np.array(self.masks, dtype=np.float32), #(N, 1300) : 0 valide, -1e9 invalide
+            'advantages' : np.array(self.advantages, dtype=np.float32),
+            'returns' : np.array(self.returns, np.float32)
+        }
+
+        #Normalisation des avantages, permet de stabiliser les gradients PPO
+        adv = data['advantages']
+        data['advantages'] = (adv - adv.mean()) / (adv.std() + 1e-8)
+
+        self._clear()
+        return data
+
+    def __len__(self):
+        return len(self.states)
+
 class PPOTrainer:
     def __init__(
             self,
