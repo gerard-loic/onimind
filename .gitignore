@@ -1,6 +1,7 @@
 .venv/
 __pycache__
 data/*
+!data/.gitkeep
 models/compiled/*
 !models/compiled/.gitkeep
 models/weights/*
