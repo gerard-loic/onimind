@@ -132,6 +132,8 @@ Un état sera représenté sous la forme d'une matrice de 5x5 sur 10 plans (5x5x
 
 Cet encodage de l'état a été choisi afin de permettre une représentation "géographique" facilitée des positions, en particulier pour les réseaux à base de couches convolutives. 
 
+![alt text](https://github.com/gerard-loic/onitama-rl/blob/master/notebooks/images/onitama_state_tensor.png?raw=true)
+
 # Joueurs de référence
 
 Plusieurs joueurs non basés sur un réseau de neurones servent de base pour l’évaluation et pour la génération des données de jeu.

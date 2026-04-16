@@ -13,31 +13,19 @@ from dl_players_v7 import DensePlayer_v7
 from alphazero_player import AlphaZeroPlayer
 from dl_minimax import LookAheadDlPlayer
 
-kamae = CNNPlayer_v6()
-kamae.load_weights(filepath="../saved-models/Kamae5.weights.h5")
-
-musashi = CNNPlayer_v4()
-musashi.load_weights(filepath="../saved-models/Musashi3.weights.h5")
-
-tairanauchu = DensePlayer_v7()
-tairanauchu.load_weights(filepath="../saved-models/Tairanauchu3.weights.h5")
-
-kamaealphazero = AlphaZeroPlayer(dl_player=kamae, num_simulations=1000)
-kamaeminimax = LookAheadDlPlayer(max_depth=5, dl_player=kamae, n_best_moves=3)
 
 players = {
     'random' : { 'class' : RandomPlayer(), 'name' : 'Joueur aléatoire', 'description' : 'Joue des coups au hasard, sans aucune stratégie.', 'stars' : 0 },
     'heuristic_regular' : { 'class' : HeuristicPlayer(heuristic_function='heuristic_regular'), 'name' : 'Joueur heuristique simple', 'description' : 'Évalue chaque coup grâce à une fonction heuristique simple.', 'stars' : 1 },
     'heuristic_2lookahead_regular' : { 'class' : LookAheadHeuristicPlayer(max_depth=2, heuristic_function='heuristic_regular'), 'name' : 'Joueur heuristique (2 coups)', 'description' : 'Anticipe jusqu\'à 2 coups à l\'avance.', 'stars' : 3 },
     'heuristic_3lookahead_regular' : { 'class' : LookAheadHeuristicPlayer(max_depth=2, heuristic_function='heuristic_regular'), 'name' : 'Joueur heuristique (3 coups)', 'description' : 'Anticipe jusqu\'à 3 coups à l\'avance.', 'stars' : 4 },
-    'kamae' : { 'class' : kamae, 'name' : 'Joueur CNN (Kamae5)', 'description' : 'Joueur sur base de réseau de neurones convolutif. (Modèle Kamae5)', 'stars' : 3},
-    'musashi' : { 'class' : musashi, 'name' : 'Joueur CNN (Musashi3)', 'description' : 'Joueur sur base de réseau de neurones convolutif. (Modèle Musashi3)', 'stars' : 2},
-    'tairanauchu' : { 'class' : tairanauchu, 'name' : 'Joueur dense (Tairanauchu3)', 'description' : 'Joueur sur base de réseau de neurones dense. (Modèle Tairanauchu3)', 'stars' : 2},
-    'kamaealphazero' : { 'class' : kamaealphazero, 'name' : 'Joueur Kamae+AlphaZero', 'description' : 'Joueur basé sur Kamae5 et un algorithme alpha zero', 'stars' : 6},
-    'kamaeaminimax' : { 'class' : kamaeminimax, 'name' : 'Joueur Kamae+Minimax', 'description' : 'Joueur basé sur Kamae5 et un algorithme minimax selectif', 'stars' : 5},
-
-
+    'kamae' : { 'class' : CNNPlayer_v6(model_file='../models/compiled/kamae5.keras'), 'name' : 'Joueur CNN (Kamae5)', 'description' : 'Joueur sur base de réseau de neurones convolutif. (Modèle Kamae5)', 'stars' : 3},
+    'musashi' : { 'class' : CNNPlayer_v4(model_file='../models/compiled/musashi3.keras'), 'name' : 'Joueur CNN (Musashi3)', 'description' : 'Joueur sur base de réseau de neurones convolutif. (Modèle Musashi3)', 'stars' : 2},
+    'tairanauchu' : { 'class' : DensePlayer_v7(model_file='../models/compiled/tairanauchu3.keras'), 'name' : 'Joueur dense (Tairanauchu3)', 'description' : 'Joueur sur base de réseau de neurones dense. (Modèle Tairanauchu3)', 'stars' : 2},
+    'kamaealphazero' : { 'class' : AlphaZeroPlayer(dl_player=CNNPlayer_v6(model_file='../models/compiled/kamae5.keras'), num_simulations=1000), 'name' : 'Nobunaga (Kamae+AlphaZero)', 'description' : 'Joueur basé sur Kamae5 et un algorithme alpha zero', 'stars' : 6},
+    'kamaeaminimax' : { 'class' : LookAheadDlPlayer(max_depth=5, dl_player=CNNPlayer_v6(model_file='../models/compiled/kamae5.keras'), n_best_moves=5), 'name' : 'Shingen (Kamae+Minimax)', 'description' : 'Joueur basé sur Kamae5 et un algorithme minimax selectif', 'stars' : 5},
 }
+
 
 class GameManager:
     @staticmethod

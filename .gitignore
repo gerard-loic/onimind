@@ -3,6 +3,4 @@ __pycache__
 data/*
 models/compiled/*
 models/weights/*
-saved-models_old
 .env
-.vscode/
