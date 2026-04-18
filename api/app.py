@@ -16,7 +16,10 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 SessionMemory.init()
 
-app = FastAPI()
+app = FastAPI(
+    title="OniMind API",
+    description="This API can be used to play against an IA agent to Onitama game. You first need to create a game by calling [POST]game. Then you can use the game_uid returned to call the different methods in order to retrieve the game state and play."
+)
 
 _allow_origins = [o.strip() for o in os.getenv("ALLOW_ORIGINS", "").split(",") if o.strip()]
 
@@ -54,18 +57,42 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 @app.post("/game")
 def post_game(request: PostGameRequest, username: str = Depends(verify_credentials)):
+    """
+    Create a new game against an IA agent.
+
+    - **player** : IA agent UID. Cf. [GET]players to get the available agent UIDs
+
+    Retrieve the initial state and a game_uid that can be used in following methods.
+    """
     game = GameManager.create(player=request.player)
 
     return game.get_game_representation()
 
 @app.get("/game/{game_uid}")
 def get_game(game_uid: str, username: str = Depends(verify_credentials)):
+    """
+    Retrieve the game state
+
+    - **game_uid** : Game UID (Obtained after calling [POST]game)
+
+    Retrieve the current game state
+    """
     game = GameManager(uid=game_uid)
 
     return game.get_game_representation()
 
 @app.post("/game/{game_uid}/player/play")
 def post_game_player_play(request:PostGamePlayerPlayRequest, game_uid:str, username: str = Depends(verify_credentials)):
+    """
+    Play a move as the human player.
+
+    - **game_uid** : Game UID (Obtained after calling [POST]game)
+    - **from_pos_col** / **from_pos_row** : Column and row of the piece to move
+    - **to_pos_col** / **to_pos_row** : Column and row of the destination cell
+    - **card_idx** : Index of the card to use for this move (0 or 1)
+
+    Returns the updated game state after the move.
+    """
     game = GameManager(uid=game_uid)
     r = game.player_play(from_pos=(request.from_pos_col, request.from_pos_row), to_pos=(request.to_pos_col, request.to_pos_row), card_idx=request.card_idx)
 
@@ -73,6 +100,13 @@ def post_game_player_play(request:PostGamePlayerPlayRequest, game_uid:str, usern
 
 @app.post("/game/{game_uid}/opponent/play")
 def post_game_opponent_play(game_uid:str, username: str = Depends(verify_credentials)):
+    """
+    Trigger the IA agent to play its move.
+
+    - **game_uid** : Game UID (Obtained after calling [POST]game)
+
+    The agent computes and applies its move. Returns the updated game state.
+    """
     game = GameManager(uid=game_uid)
     r = game.opponent_play()
 
@@ -80,6 +114,12 @@ def post_game_opponent_play(game_uid:str, username: str = Depends(verify_credent
 
 @app.get("/players")
 def get_players(username: str = Depends(verify_credentials)):
+    """
+    Retrieve the list of available IA agents.
+
+    Returns each agent's UID, name, description, difficulty (stars), and class.
+    Use the **uid** field when creating a new game with [POST]game.
+    """
     out = {
         'players' : []
     }
@@ -98,6 +138,11 @@ def get_players(username: str = Depends(verify_credentials)):
 
 @app.get("/cards")
 def get_cards(username: str = Depends(verify_credentials)):
+    """
+    Retrieve the list of all Onitama cards.
+
+    Returns each card's name, moves, and metadata. Cards are randomly assigned at the start of each game.
+    """
     return [
         {k: v for k, v in card.__dict__.items() if k not in ("print_value", "opponent_print_value")}
         for card in CARDS
