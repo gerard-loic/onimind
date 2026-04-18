@@ -1,9 +1,11 @@
+![alt text](https://github.com/gerard-loic/onimind/blob/master/notebooks/images/planche-logo-onimind?raw=true)
+
 # D'Onitama et de son attrait pour le Deep Learning
 
 Onitama est un jeu de stratégie abstrait, pour deux joueurs, créé par Shimpei Sato et publié en 2014. Il se joue sur un plateau de 5x5 cases, chaque joueur disposant de 5 pions : un maître et 4 disciples. L’objectif est de capturer le maître adverse ou d’amener son propre maître sur le temple de l’adversaire.
 La spécificité du jeu réside dans son système de cartes de mouvement. Lors de chaque partie cinq cartes sont tirées aléatoirement parmi un deck de 16 cartes. Ces cartes vont définir les déplacements autorisés pour les pièces du joueur qui les détient, sachant que deux cartes sont attribuées à chaque joueur et qu’une cinquième reste en attente. Dès qu’une carte va être utilisée par un joueur il va échanger la carte utilisée avec celle en attente. Les mouvements légaux évoluent donc en permanence au fil de la partie. 
 
-![alt text](https://github.com/gerard-loic/onitama-rl/blob/master/notebooks/images/jeu.png?raw=true)
+![alt text](https://github.com/gerard-loic/onimind/blob/master/notebooks/images/jeu.png?raw=true)
 
 Ce projet a pour ambition de concevoir un agent artificiel basé sur un réseau de neurones capable d'apprendre à jouer à Onitama. L'objectif final est d'obtenir un agent compétitif, capable de rivaliser avec un joueur humain averti, en ayant développé par lui-même des stratégies cohérentes et efficaces propres à la complexité tactique d'Onitama.
 
@@ -132,7 +134,7 @@ Un état sera représenté sous la forme d'une matrice de 5x5 sur 10 plans (5x5x
 
 Cet encodage de l'état a été choisi afin de permettre une représentation "géographique" facilitée des positions, en particulier pour les réseaux à base de couches convolutives. 
 
-![alt text](https://github.com/gerard-loic/onitama-rl/blob/master/notebooks/images/onitama_state_tensor.png?raw=true)
+![alt text](https://github.com/gerard-loic/onimind/blob/master/notebooks/images/onitama_state_tensor.png?raw=true)
 
 # Joueurs de référence
 
@@ -167,35 +169,35 @@ Voici le récapitulatif versions d'architecture :
 | v10 | Sukoshi | Architecture sur réseau dense, sans LayerNormalization, sans Dropout, allégée avec skip connection, base du modèle Sukoshi | Dense | Dense(128)+Dense(128)+Dense(64) | Dense(64)+Dense(32) | Dense(64) |
 
 ## Modèle Musashi
-![alt text](https://github.com/gerard-loic/onitama-rl/blob/master/notebooks/images/onitama_network_v4_architecture.png?raw=true)
+![alt text](https://github.com/gerard-loic/onimind/blob/master/notebooks/images/onitama_network_v4_architecture.png?raw=true)
 
 ## Modèle Kamae
-![alt text](https://github.com/gerard-loic/onitama-rl/blob/master/notebooks/images/onitama_network_v6_architecture.png?raw=true)
+![alt text](https://github.com/gerard-loic/onimind/blob/master/notebooks/images/onitama_network_v6_architecture.png?raw=true)
 
 ## Modèle Tairanauchu
-![alt text](https://github.com/gerard-loic/onitama-rl/blob/master/notebooks/images/onitama_network_v7_architecture.png?raw=true)
+![alt text](https://github.com/gerard-loic/onimind/blob/master/notebooks/images/onitama_network_v7_architecture.png?raw=true)
 
 ## Modèle Shigemori
-![alt text](https://github.com/gerard-loic/onitama-rl/blob/master/notebooks/images/onitama_network_v9_architecture.png?raw=true)
+![alt text](https://github.com/gerard-loic/onimind/blob/master/notebooks/images/onitama_network_v9_architecture.png?raw=true)
 
 ## Modèle Sukoshi
-![alt text](https://github.com/gerard-loic/onitama-rl/blob/master/notebooks/images/onitama_network_v10_architecture.png?raw=true)
+![alt text](https://github.com/gerard-loic/onimind/blob/master/notebooks/images/onitama_network_v10_architecture.png?raw=true)
 
 # Génération des données d'entraînement
 La première étape du projet consiste à générer un dataset de données en faisant jouer des joueurs de référence de différents niveaux les uns contre les autres. Des données de 30000 parties ont ainsi été générées, seules les trajectoires (ensemble des coups du joueur concerné dans la partie) ayant abouti à une victoire ont été conservées afin de diriger l'apprentissage vers les séquences de jeu les plus efficaces. Pour chaque coup on a conservé l’action jouée, l’état et le masque des coups valides. 
 
-![alt text](https://github.com/gerard-loic/onitama-rl/blob/master/notebooks/images/performances-joueurs-reference.png?raw=true)
+![alt text](https://github.com/gerard-loic/onimind/blob/master/notebooks/images/performances-joueurs-reference.png?raw=true)
 
 # Entraînement supervisé par imitation
 La première phase d'entraînement consiste à apprendre par imitation des joueurs heuristiques de référence. Les différents réseaux ont été entraînés sur la tête de politique uniquement (la tête de valeur est gelée), avec une loss cross-entropie masquée qui contraint le label smoothing aux seuls coups légaux. Sans masque, la softmax distribue de la probabilité sur toutes les 1300 actions, y compris les coups illégaux. Le réseau gaspille alors de la capacité à "raisonner" sur des coups impossibles, et ses probabilités sur les coups légaux sont mécaniquement diluées. 
 
 Durant l’entraînement supervisé j’ai choisi de suivre les métriques de loss, d'accuracy (« le coup joué par le joueur de référence est-il celui prédit ? ») et de top-k accuracy avec k = 3, 5 et 10 (« Le coup joué par le joueur de référence est-il dans les k meilleurs coups prédits ? » ). 
 
-![alt text](https://github.com/gerard-loic/onitama-rl/blob/master/notebooks/images/entrainement-supervise-kamae.png?raw=true)
+![alt text](https://github.com/gerard-loic/onimind/blob/master/notebooks/images/entrainement-supervise-kamae.png?raw=true)
 
 Une fois la tête de politique entraînée, une deuxième phase d'entraînement supervisé cible exclusivement la tête de valeur, en gelant le tronc et la tête de politique. Le réseau joue 128 parties par itération contre des joueurs heuristiques, et la tête de valeur est entraînée à prédire le résultat final de la partie (±1) depuis chaque état visité. Cette initialise la tête de valeur à un niveau raisonnable avant le PPO afin de stabiliser l'entraînement par renforcement : sans ce pré-entraînement, les estimations initiales de V(s) sont trop peu fiables pour que le calcul des avantages GAE soit utile dès les premières itérations PPO.
 
-![alt text](https://github.com/gerard-loic/onitama-rl/blob/master/notebooks/images/performances-apres-supervise.png?raw=true)
+![alt text](https://github.com/gerard-loic/onimind/blob/master/notebooks/images/performances-apres-supervise.png?raw=true)
 
 # Entraînement PPO
 
@@ -204,11 +206,11 @@ Une fois la tête de politique entraînée, une deuxième phase d'entraînement 
 Les récompenses sont propagées rétrospectivement via la formule de GAE pour calculer l'avantage estimé de chaque coup. La mise à jour PPO réexploite ensuite ces données en clippant le ratio de politique pour limiter la divergence entre ancienne et nouvelle politique. La loss totale combine la policy loss clippée, une value loss et un bonus d'entropie pour maintenir l'exploration. Autrement dit on réunit trois objectifs distincts en un seul signal de gradient : la policy loss (« Apprendre quoi jouer »), la value loss (« apprendre à s’évaluer ») et l’entropie qui mesure à quel point la distribution des politiques est étalée sur les coups valides. Sans l’entropie le réseau à tendance à converger trop rapidement vers une situation déterministe, c’est-à-dire à jouer toujours les mêmes coups sans laisser sa chance à l’exploration. 
 
 
-![alt text](https://github.com/gerard-loic/onitama-rl/blob/master/notebooks/images/entrainement-PPO.png?raw=true)
+![alt text](https://github.com/gerard-loic/onimind/blob/master/notebooks/images/entrainement-PPO.png?raw=true)
 
 Ce cycle est répété pendant 750 itérations, avec une sauvegarde et un test d'efficacité toutes les 10 itérations consistant en une session de parties entre le modèle entraîné dans l’état et les joueurs de référence (Joueur heuristique avec minimax à 1, 2 et 3 niveaux de profondeur). Le taux de victoire (win rate) est mesuré sur 200 parties. 
 
-![alt text](https://github.com/gerard-loic/onitama-rl/blob/master/notebooks/images/performances-apres-ppo.png?raw=true)
+![alt text](https://github.com/gerard-loic/onimind/blob/master/notebooks/images/performances-apres-ppo.png?raw=true)
 
 # Modèles mixtes
 
@@ -221,7 +223,7 @@ Le modèle Kamae obtient après entraînement PPO les meilleures performances pu
 # Evaluation
 
 Une évaluation comparée de l’ensemble des joueurs basés sur des réseaux de neurones contre les joueurs heuristiques de référence permet d’obtenir les résultats d’évaluation suivants : 
-![alt text](https://github.com/gerard-loic/onitama-rl/blob/master/notebooks/images/evaluation-finale.png?raw=true)
+![alt text](https://github.com/gerard-loic/onimind/blob/master/notebooks/images/evaluation-finale.png?raw=true)
 
 Ces performances permettent de valider les capacités des modèles entraînés à répondre à la problématique et démontrent la pertinence de la démarche d'entraînement progressive adoptée. En effet, les résultats des modèles "purs" (sans algorithme complémentaire) illustrent l'apport de chaque étape du pipeline : le modèle Kamae, issu de l'architecture convolutive v6, progresse de 85 %/33 %/9 % après l'entraînement supervisé seul jusqu'à 93 %/51 %/27 % après le double entraînement PPO, confirmant que l'apprentissage par renforcement permet au réseau de dépasser significativement le niveau des données d'imitation sur lesquelles il a été initialisé.
 
