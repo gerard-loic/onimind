@@ -1,4 +1,4 @@
-![alt text](https://github.com/gerard-loic/onimind/blob/master/notebooks/images/planche-logo-onimind?raw=true)
+![alt text](https://github.com/gerard-loic/onimind/blob/master/notebooks/images/planche-logo-onimind.jpg?raw=true)
 
 # D'Onitama et de son attrait pour le Deep Learning
 
