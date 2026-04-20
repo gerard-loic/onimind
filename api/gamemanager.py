@@ -23,7 +23,7 @@ players = {
     'musashi' : { 'class' : CNNPlayer_v4(model_file='../models/compiled/musashi3.keras'), 'name' : 'Joueur CNN (Musashi3)', 'description' : 'Joueur sur base de réseau de neurones convolutif. (Modèle Musashi3)', 'stars' : 2},
     'tairanauchu' : { 'class' : DensePlayer_v7(model_file='../models/compiled/tairanauchu3.keras'), 'name' : 'Joueur dense (Tairanauchu3)', 'description' : 'Joueur sur base de réseau de neurones dense. (Modèle Tairanauchu3)', 'stars' : 2},
     'kamaealphazero' : { 'class' : AlphaZeroPlayer(dl_player=CNNPlayer_v6(model_file='../models/compiled/kamae5.keras'), num_simulations=1000), 'name' : 'Nobunaga (Kamae+AlphaZero)', 'description' : 'Joueur basé sur Kamae5 et un algorithme alpha zero', 'stars' : 6},
-    'kamaeaminimax' : { 'class' : LookAheadDlPlayer(max_depth=5, dl_player=CNNPlayer_v6(model_file='../models/compiled/kamae5.keras'), n_best_moves=5), 'name' : 'Shingen (Kamae+Minimax)', 'description' : 'Joueur basé sur Kamae5 et un algorithme minimax selectif', 'stars' : 5},
+    'kamaeaminimax' : { 'class' : LookAheadDlPlayer(max_depth=5, dl_player=CNNPlayer_v6(model_file='../models/compiled/kamae5.keras'), n_best_moves=3), 'name' : 'Shingen (Kamae+Minimax)', 'description' : 'Joueur basé sur Kamae5 et un algorithme minimax selectif', 'stars' : 5},
 }
 
 
